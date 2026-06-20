@@ -846,7 +846,9 @@ function showPage(id) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.getElementById('nav-' + id)?.classList.add('active');
-  if (id === 'map') drawMap();
+  if (id === 'map') {
+    setTimeout(() => { if (_leafletMap) _leafletMap.invalidateSize(); }, 100);
+  }
 }
 
 // ── TOAST ────────────────────────────────────────────────────────────────
