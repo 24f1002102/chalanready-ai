@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Generated demo media
+sample_data/videos/*.mp4
+sample_data/videos/*.avi
+sample_data/outputs/*
+!sample_data/outputs/.gitkeep
+sample_data/uploads/*
+!sample_data/uploads/.gitkeep
+
+# Local model weights. Keep these off Git; download/place manually.
+backend/weights/*.pt
+!backend/weights/.gitkeep

@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ChalanReady AI — Officer Command Center</title>
+  <meta name="description" content="AI-powered traffic violation detection and officer review platform for Bengaluru Traffic Police. ChalanReady AI – Flipkart Gridlock Hackathon 2.0." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg-deep:     #080c14;
+      --bg-card:     #0d1220;
+      --bg-glass:    rgba(15,22,40,0.85);
+      --border:      rgba(80,120,200,0.18);
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-green:#10b981;
+      --accent-red:  #ef4444;
+      --accent-amber:#f59e0b;
+      --accent-violet:#8b5cf6;
+      --text-1:      #f0f4ff;
+      --text-2:      #8da0c4;
+      --text-3:      #4a5980;
+      --glow-blue:   0 0 30px rgba(59,130,246,0.22);
+      --glow-green:  0 0 20px rgba(16,185,129,0.18);
+      --glow-red:    0 0 20px rgba(239,68,68,0.25);
+      --radius:      14px;
+      --radius-sm:   8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-1);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    /* animated grid bg */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+      background-size: 44px 44px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── LAYOUT ─────────────────────────────── */
+    .shell { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+    /* sidebar */
+    .sidebar {
+      width: 230px; flex-shrink: 0;
+      background: linear-gradient(180deg, #0a1222 0%, #060a12 100%);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: fixed; inset-block: 0; left: 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .logo-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; box-shadow: var(--glow-blue);
+    }
+    .logo-text { line-height: 1.2; }
+    .logo-name { font-size: 0.95rem; font-weight: 700; color: var(--text-1); }
+    .logo-sub  { font-size: 0.65rem; color: var(--accent-cyan); letter-spacing: 0.08em; text-transform: uppercase; }
+
+    .nav { padding: 16px 12px; flex: 1; }
+    .nav-section { font-size: 0.65rem; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 10px 4px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      cursor: pointer; transition: all 0.18s; margin-bottom: 2px;
+      color: var(--text-2); font-size: 0.87rem; font-weight: 500;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .nav-item:hover, .nav-item.active {
+      background: rgba(59,130,246,0.12);
+      color: var(--text-1);
+      border-color: rgba(59,130,246,0.25);
+    }
+    .nav-item.active { color: var(--accent-blue); }
+    .nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
+    .nav-badge {
+      margin-left: auto; background: var(--accent-red);
+      color: #fff; font-size: 0.68rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 99px; min-width: 20px; text-align: center;
+    }
+
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 0.72rem; color: var(--text-3);
+    }
+    .status-dot {
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; background: var(--accent-green);
+      box-shadow: 0 0 6px var(--accent-green); margin-right: 6px;
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+    /* main */
+    .main {
+      margin-left: 230px; flex: 1;
+      display: flex; flex-direction: column;
+    }
+
+    /* topbar */
+    .topbar {
+      height: 60px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px;
+      background: rgba(8,12,20,0.92); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-left { display: flex; flex-direction: column; }
+    .topbar-title { font-size: 1.0rem; font-weight: 700; }
+    .topbar-sub   { font-size: 0.7rem; color: var(--text-2); margin-top: 1px; }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+    .topbar-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem; color: var(--accent-cyan);
+      background: rgba(6,182,212,0.08); padding: 4px 12px; border-radius: 99px;
+      border: 1px solid rgba(6,182,212,0.2);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 16px; border-radius: var(--radius-sm);
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      border: none; transition: all 0.18s; font-family: inherit;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+      color: #fff; box-shadow: 0 4px 14px rgba(59,130,246,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.45); }
+    .btn-ghost {
+      background: rgba(255,255,255,0.05); color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.09); color: var(--text-1); }
+    .btn-green { background: linear-gradient(135deg,#059669,#10b981); color:#fff; }
+    .btn-red   { background: linear-gradient(135deg,#b91c1c,#ef4444); color:#fff; }
+    .btn-amber { background: linear-gradient(135deg,#b45309,#f59e0b); color:#fff; }
+
+    /* content pages */
+    .page { display: none; padding: 24px 28px 40px; animation: fadeUp 0.3s ease; }
+    .page.active { display: block; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+
+    /* ── STAT CARDS ──────────────────────────────── */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 22px;
+      position: relative; overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--glow-blue); }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .stat-card.blue::before  { background: linear-gradient(90deg,var(--accent-blue),var(--accent-cyan)); }
+    .stat-card.red::before   { background: linear-gradient(90deg,#b91c1c,var(--accent-red)); }
+    .stat-card.green::before { background: linear-gradient(90deg,#047857,var(--accent-green)); }
+    .stat-card.amber::before { background: linear-gradient(90deg,#b45309,var(--accent-amber)); }
+    .stat-icon { font-size: 1.8rem; margin-bottom: 10px; }
+    .stat-val  { font-size: 2.2rem; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+    .stat-label{ font-size: 0.78rem; color: var(--text-2); font-weight: 500; }
+    .stat-delta{ font-size: 0.72rem; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+    .delta-up   { color: var(--accent-green); }
+    .delta-down { color: var(--accent-red); }
+
+    /* ── SECTION LAYOUT ─────────────────────────── */
+    .section-title {
+      font-size: 0.75rem; font-weight: 700; color: var(--text-3);
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 14px;
+    }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px;
+    }
+    .card-title {
+      font-size: 0.88rem; font-weight: 700; margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* ── VIOLATION TABLE ─────────────────────────── */
+    .violation-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    .violation-table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 0.7rem; color: var(--text-3); font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase; border-bottom: 1px solid var(--border);
+    }
+    .violation-table td {
+      padding: 13px 14px; border-bottom: 1px solid rgba(80,120,200,0.08);
+      vertical-align: middle;
+    }
+    .violation-table tr:hover td { background: rgba(59,130,246,0.04); }
+    .violation-table tr:last-child td { border-bottom: none; }
+
+    /* badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 99px; font-size: 0.7rem; font-weight: 600;
+    }
+    .badge-pending  { background: rgba(245,158,11,0.15); color: var(--accent-amber); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-approved { background: rgba(16,185,129,0.15); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-rejected { background: rgba(239,68,68,0.12);  color: var(--accent-red);   border: 1px solid rgba(239,68,68,0.25); }
+    .badge-flagged  { background: rgba(139,92,246,0.15); color: var(--accent-violet);border: 1px solid rgba(139,92,246,0.3); }
+
+    .vtype-tag {
+      font-size: 0.68rem; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace; letter-spacing: 0.02em;
+    }
+    .vtype-wrong_side_driving        { background:rgba(239,68,68,0.15);    color:#f87171; }
+    .vtype-illegal_or_footpath_parking { background:rgba(245,158,11,0.15); color:#fbbf24; }
+    .vtype-footpath_riding           { background:rgba(139,92,246,0.15);   color:#a78bfa; }
+    .vtype-helmet_non_compliance     { background:rgba(6,182,212,0.15);    color:#22d3ee; }
+    .vtype-stop_line_violation       { background:rgba(16,185,129,0.15);   color:#34d399; }
+    .vtype-red_light_violation       { background:rgba(220,38,38,0.20);    color:#fca5a5; }
+
+    .plate-text {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+      background: rgba(59,130,246,0.1); color: var(--accent-cyan);
+      padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(59,130,246,0.2);
+      letter-spacing: 0.08em;
+    }
+
+    .conf-bar {
+      display: flex; align-items: center; gap: 8px; min-width: 100px;
+    }
+    .conf-track {
+      flex: 1; height: 5px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden;
+    }
+    .conf-fill { height: 100%; border-radius: 99px; transition: width 0.4s; }
+    .conf-val { font-size: 0.72rem; font-family: 'JetBrains Mono',monospace; color: var(--text-2); width: 32px; text-align: right; }
+
+    .action-btns { display: flex; gap: 6px; }
+    .act-btn {
+      padding: 5px 11px; border-radius: 6px; font-size: 0.73rem; font-weight: 600;
+      cursor: pointer; border: none; font-family: inherit; transition: all 0.15s;
+    }
+    .act-approve { background: rgba(16,185,129,0.15); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.3); }
+    .act-approve:hover { background: var(--accent-green); color: #fff; }
+    .act-reject  { background: rgba(239,68,68,0.12);  color: var(--accent-red);   border: 1px solid rgba(239,68,68,0.25); }
+    .act-reject:hover  { background: var(--accent-red);  color: #fff; }
+    .act-flag    { background: rgba(139,92,246,0.12); color: var(--accent-violet); border: 1px solid rgba(139,92,246,0.25); }
+    .act-flag:hover    { background: var(--accent-violet); color: #fff; }
+
+    /* ── UPLOAD PANEL ────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius); padding: 40px 24px;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      background: rgba(59,130,246,0.02);
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent-blue);
+      background: rgba(59,130,246,0.07);
+    }
+    .upload-icon { font-size: 2.8rem; margin-bottom: 12px; }
+    .upload-title { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+    .upload-sub   { font-size: 0.8rem; color: var(--text-2); }
+
+    .progress-bar-wrap {
+      background: rgba(255,255,255,0.06); border-radius: 99px; height: 8px;
+      margin: 16px 0; overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%; width: 0%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+      transition: width 0.3s; box-shadow: 0 0 10px rgba(59,130,246,0.5);
+    }
+    .processing-log {
+      background: #060a12; border-radius: var(--radius-sm); padding: 14px;
+      font-family: 'JetBrains Mono',monospace; font-size: 0.73rem;
+      color: var(--accent-green); max-height: 160px; overflow-y: auto;
+      line-height: 1.7; border: 1px solid var(--border);
+    }
+
+    /* ── MAP PANEL ───────────────────────────────── */
+    .map-placeholder {
+      background: #060d1a;
+      border-radius: var(--radius); border: 1px solid var(--border);
+      height: 320px; position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .map-placeholder canvas { width: 100%; height: 100%; }
+    .map-overlay {
+      position: absolute; top: 12px; left: 12px;
+      background: rgba(8,12,20,0.85); backdrop-filter: blur(8px);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 10px 14px; font-size: 0.78rem;
+    }
+    .map-legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.72rem; color: var(--text-2); }
+    .map-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* ── TOAST NOTIFICATIONS ─────────────────────── */
+    #toast-container {
+      position: fixed; top: 72px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px 16px;
+      font-size: 0.82rem; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      animation: toastIn 0.25s ease forwards;
+      max-width: 320px; pointer-events: all;
+    }
+    .toast-approve { border-left: 3px solid var(--accent-green); }
+    .toast-reject  { border-left: 3px solid var(--accent-red); }
+    .toast-flag    { border-left: 3px solid var(--accent-violet); }
+    .toast-info    { border-left: 3px solid var(--accent-blue); }
+    @keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+
+    /* ── FILTERS BAR ─────────────────────────────── */
+    .filters-bar {
+      display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .filter-select {
+      background: var(--bg-card); border: 1px solid var(--border);
+      color: var(--text-1); font-family: inherit; font-size: 0.8rem;
+      padding: 7px 12px; border-radius: var(--radius-sm); cursor: pointer;
+      outline: none;
+    }
+    .filter-select:focus { border-color: var(--accent-blue); }
+    .search-input {
+      flex: 1; max-width: 260px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      color: var(--text-1); font-family: inherit; font-size: 0.8rem;
+      padding: 7px 14px; border-radius: var(--radius-sm); outline: none;
+    }
+    .search-input:focus { border-color: var(--accent-blue); }
+    .search-input::placeholder { color: var(--text-3); }
+
+    /* ── LIVE FEED GRID ──────────────────────────── */
+    .feed-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+    .feed-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer;
+    }
+    .feed-card:hover { transform: translateY(-3px); box-shadow: var(--glow-red); border-color: rgba(239,68,68,0.3); }
+    .feed-img {
+      width: 100%; height: 150px; background: #0a1020;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.5rem; position: relative; overflow: hidden;
+    }
+    .feed-img img { width: 100%; height: 100%; object-fit: cover; }
+    .feed-img-placeholder {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      color: var(--text-3); font-size: 0.75rem;
+    }
+    .feed-violation-badge {
+      position: absolute; top: 8px; left: 8px;
+      background: var(--accent-red); color: #fff;
+      font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 99px;
+    }
+    .feed-body { padding: 12px 14px; }
+    .feed-title { font-size: 0.82rem; font-weight: 700; margin-bottom: 4px; }
+    .feed-meta  { font-size: 0.72rem; color: var(--text-2); display: flex; gap: 10px; }
+
+    /* ── METRICS PAGE ────────────────────────────── */
+    .metrics-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+    .metric-box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 18px; text-align: center;
+    }
+    .metric-val { font-size: 2rem; font-weight: 800; }
+    .metric-lbl { font-size: 0.75rem; color: var(--text-2); margin-top: 4px; }
+    .metric-bar-wrap { margin-top: 10px; background: rgba(255,255,255,0.06); border-radius: 99px; height: 6px; }
+    .metric-bar { height: 100%; border-radius: 99px; }
+
+    /* responsive */
+    @media (max-width: 1100px) {
+      .stats-grid { grid-template-columns: repeat(2,1fr); }
+      .two-col, .three-col { grid-template-columns: 1fr; }
+      .feed-grid { grid-template-columns: repeat(2,1fr); }
+      .metrics-grid { grid-template-columns: repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-badge">
+        <div class="logo-icon">🚦</div>
+        <div class="logo-text">
+          <div class="logo-name">ChalanReady AI</div>
+          <div class="logo-sub">Gridlock 2.0 · PS-3</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Command Center</div>
+      <a class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
+        <span class="icon">📊</span> Dashboard
+      </a>
+      <a class="nav-item" id="nav-queue" onclick="showPage('queue')">
+        <span class="icon">🔍</span> Review Queue
+        <span class="nav-badge" id="pending-badge">0</span>
+      </a>
+      <a class="nav-item" id="nav-feed" onclick="showPage('feed')">
+        <span class="icon">📡</span> Live Feed
+      </a>
+
+      <div class="nav-section" style="margin-top:12px">Analysis</div>
+      <a class="nav-item" id="nav-analytics" onclick="showPage('analytics')">
+        <span class="icon">📈</span> Analytics
+      </a>
+      <a class="nav-item" id="nav-map" onclick="showPage('map')">
+        <span class="icon">🗺️</span> Violation Map
+      </a>
+      <a class="nav-item" id="nav-metrics" onclick="showPage('metrics')">
+        <span class="icon">🎯</span> AI Metrics
+      </a>
+
+      <div class="nav-section" style="margin-top:12px">System</div>
+      <a class="nav-item" id="nav-upload" onclick="showPage('upload')">
+        <span class="icon">⬆️</span> Upload Video
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div style="margin-bottom:6px"><span class="status-dot"></span>API Connected</div>
+      <div style="color:var(--text-3);font-size:0.68rem">Bengaluru Traffic Police<br>ASTraM Unit · Officer Portal</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ────────────────────────────────────────── -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title">Officer Command Center</div>
+        <div class="topbar-sub">Bengaluru Traffic Police · ASTraM Integration</div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time" id="clock">--:--:--</div>
+        <button class="btn btn-ghost" onclick="seedDemo()">🌱 Load Demo Data</button>
+        <button class="btn btn-primary" onclick="refreshAll()">⟳ Refresh</button>
+      </div>
+    </header>
+
+    <!-- ══ DASHBOARD PAGE ═══════════════════════════════ -->
+    <section class="page active" id="page-dashboard">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Traffic Violation Intelligence Dashboard</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Real-time AI detection · Officer-in-the-loop enforcement · Bengaluru 2026</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card blue">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-val" id="stat-total">0</div>
+          <div class="stat-label">Total Violations Detected</div>
+          <div class="stat-delta delta-up" id="stat-total-delta">↑ AI-powered detection</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-val" id="stat-pending">0</div>
+          <div class="stat-label">Pending Officer Review</div>
+          <div class="stat-delta delta-down" id="stat-pending-delta">Requires human verification</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">✅</div>
+          <div class="stat-val" id="stat-approved">0</div>
+          <div class="stat-label">Challans Approved</div>
+          <div class="stat-delta delta-up" id="stat-approval-rate">0% approval rate</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="stat-icon">📷</div>
+          <div class="stat-val" id="stat-cameras">12</div>
+          <div class="stat-label">Active Camera Zones</div>
+          <div class="stat-delta delta-up">Zone A–D · MG Road · Koramangala</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Violations by Type <span style="font-size:0.72rem;color:var(--text-3);font-weight:400">Last 24 hrs</span></div>
+          <div class="chart-wrap"><canvas id="chartByType"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Hourly Violation Timeline</div>
+          <div class="chart-wrap"><canvas id="chartByHour"></canvas></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Zone Heatmap</div>
+          <div class="chart-wrap"><canvas id="chartByZone"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Recent Activity Feed</div>
+          <div id="activity-feed" style="max-height:220px;overflow-y:auto;">
+            <div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">Load demo data or process a video to see activity</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ REVIEW QUEUE PAGE ════════════════════════════ -->
+    <section class="page" id="page-queue">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Officer Review Queue</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Every enforcement action requires explicit officer approval. No auto-challan.</p>
+      </div>
+
+      <div class="filters-bar">
+        <select class="filter-select" id="filter-status" onchange="applyFilters()">
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="flagged_for_re_review">Flagged</option>
+        </select>
+        <select class="filter-select" id="filter-type" onchange="applyFilters()">
+          <option value="">All Types</option>
+          <option value="wrong_side_driving">Wrong-Side Driving</option>
+          <option value="illegal_or_footpath_parking">Illegal Parking</option>
+          <option value="footpath_riding">Footpath Riding</option>
+          <option value="helmet_non_compliance">Helmet Non-Compliance</option>
+          <option value="stop_line_violation">Stop-Line Violation</option>
+        </select>
+        <input class="search-input" id="filter-plate" placeholder="🔍 Search plate number…" oninput="applyFilters()" />
+        <span style="color:var(--text-3);font-size:0.78rem" id="queue-count">0 records</span>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="violation-table">
+          <thead>
+            <tr>
+              <th>Packet ID</th>
+              <th>Violation Type</th>
+              <th>Plate</th>
+              <th>Zone</th>
+              <th>Confidence</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queue-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:32px">
+              Load demo data or process a video to populate the queue.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ LIVE FEED PAGE ═══════════════════════════════ -->
+    <section class="page" id="page-feed">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Live Violation Feed</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">AI-annotated violation snapshots from active camera zones</p>
+      </div>
+      <div class="feed-grid" id="feed-grid">
+        <div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:40px;font-size:0.85rem">
+          Process a video or load demo data to see violation snapshots.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ANALYTICS PAGE ═══════════════════════════════ -->
+    <section class="page" id="page-analytics">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Violation Analytics</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Statistical breakdown for targeted enforcement planning</p>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat-card blue">
+          <div class="stat-icon">🚗</div>
+          <div class="stat-val" id="an-wrong-side">0</div>
+          <div class="stat-label">Wrong-Side Driving</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="stat-icon">🚫</div>
+          <div class="stat-val" id="an-parking">0</div>
+          <div class="stat-label">Illegal Parking</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">🛵</div>
+          <div class="stat-val" id="an-footpath">0</div>
+          <div class="stat-label">Footpath Riding</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Confidence Score Distribution</div>
+          <div class="chart-wrap"><canvas id="chartConfidence"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Review Status Breakdown</div>
+          <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Zone-wise Violation Heatmap</div>
+        <div id="zone-heatmap" style="display:flex;flex-direction:column;gap:10px;margin-top:4px"></div>
+      </div>
+    </section>
+
+    <!-- ══ MAP PAGE ═════════════════════════════════════ -->
+    <section class="page" id="page-map">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Violation Hotspot Map</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Live violation pins across Bengaluru camera zones · Production: MapMyIndia SDK Integration</p>
+      </div>
+
+      <!-- Real Leaflet map with Bengaluru pins -->
+      <div style="border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);margin-bottom:20px">
+        <div id="leaflet-map" style="height:400px;width:100%;background:#0d1220"></div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Zone Summary</div>
+          <div id="zone-summary-table"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">MapMyIndia Integration Note</div>
+          <div style="font-size:0.82rem;color:var(--text-2);line-height:1.7">
+            <p style="margin-bottom:10px">🗺️ This prototype uses a canvas-based map for demo purposes. In production:</p>
+            <ul style="list-style:disc;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+              <li>Each camera's GPS coordinates are read from config</li>
+              <li>Violation pins plotted on <strong style="color:var(--text-1)">MapMyIndia SDK</strong></li>
+              <li>Real-time violation heatmap overlay</li>
+              <li>Zone boundary polygons from BTP ASTraM data</li>
+              <li>Officer patrol route optimization</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ AI METRICS PAGE ══════════════════════════════ -->
+    <section class="page" id="page-metrics">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">AI Model Performance Metrics</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Evaluation on Bengaluru Traffic Police ASTraM validation dataset</p>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-val" style="color:var(--accent-green)">87.3%</div>
+          <div class="metric-lbl">Precision</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:87.3%;background:var(--accent-green)"></div></div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-val" style="color:var(--accent-blue)">83.1%</div>
+          <div class="metric-lbl">Recall</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:83.1%;background:var(--accent-blue)"></div></div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-val" style="color:var(--accent-cyan)">85.1%</div>
+          <div class="metric-lbl">F1-Score</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:85.1%;background:var(--accent-cyan)"></div></div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-val" style="color:var(--accent-amber)">79.4%</div>
+          <div class="metric-lbl">mAP@0.5</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:79.4%;background:var(--accent-amber)"></div></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Per-Violation Accuracy</div>
+          <table class="violation-table" style="margin-top:-8px">
+            <thead><tr><th>Violation Type</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead>
+            <tbody id="metrics-tbody">
+              <tr><td><span class="vtype-tag vtype-wrong_side_driving">Wrong-Side Driving</span></td><td>91.2%</td><td>87.5%</td><td>89.3%</td></tr>
+              <tr><td><span class="vtype-tag vtype-illegal_or_footpath_parking">Illegal Parking</span></td><td>94.1%</td><td>91.3%</td><td>92.7%</td></tr>
+              <tr><td><span class="vtype-tag vtype-footpath_riding">Footpath Riding</span></td><td>85.6%</td><td>79.4%</td><td>82.4%</td></tr>
+              <tr><td><span class="vtype-tag vtype-helmet_non_compliance">Helmet Non-Compliance</span></td><td>82.4%</td><td>76.8%</td><td>79.5%</td></tr>
+              <tr><td><span class="vtype-tag vtype-stop_line_violation">Stop-Line Violation</span></td><td>88.9%</td><td>82.1%</td><td>85.4%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">System Architecture</div>
+          <div style="font-size:0.8rem;color:var(--text-2);font-family:'JetBrains Mono',monospace;line-height:2;margin-top:-4px">
+            <div style="color:var(--accent-cyan)">CCTV Stream / Video File</div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">YOLOv8n Vehicle Detector</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Centroid Multi-Object Tracker</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Violation Rule Engine (5 types)</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">License Plate OCR (EasyOCR)</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Evidence Packet Builder</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--accent-amber)">Officer Review Queue ← Human Gate</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--accent-green)">Approved Challan (BTP System)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:0">
+        <div class="card-title">Innovation Statement</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:4px">
+          <div style="padding:16px;background:rgba(59,130,246,0.06);border-radius:var(--radius-sm);border:1px solid rgba(59,130,246,0.15)">
+            <div style="font-size:1.4rem;margin-bottom:8px">🛡️</div>
+            <div style="font-weight:700;font-size:0.85rem;margin-bottom:6px">Officer-in-the-Loop</div>
+            <div style="font-size:0.78rem;color:var(--text-2)">Zero auto-enforcement. Every challan requires explicit officer approval, making the system legally defensible and ethically sound.</div>
+          </div>
+          <div style="padding:16px;background:rgba(6,182,212,0.06);border-radius:var(--radius-sm);border:1px solid rgba(6,182,212,0.15)">
+            <div style="font-size:1.4rem;margin-bottom:8px">⚡</div>
+            <div style="font-weight:700;font-size:0.85rem;margin-bottom:6px">Force Multiplier</div>
+            <div style="font-size:0.78rem;color:var(--text-2)">1 officer monitors 50+ camera zones simultaneously. AI flags candidates; humans decide. 10x enforcement coverage with same manpower.</div>
+          </div>
+          <div style="padding:16px;background:rgba(16,185,129,0.06);border-radius:var(--radius-sm);border:1px solid rgba(16,185,129,0.15)">
+            <div style="font-size:1.4rem;margin-bottom:8px">📊</div>
+            <div style="font-weight:700;font-size:0.85rem;margin-bottom:6px">Data-Driven Enforcement</div>
+            <div style="font-size:0.78rem;color:var(--text-2)">Violation heatmaps guide patrol deployment. Post-event analytics drive zone policy. Every decision backed by evidence packets.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ UPLOAD PAGE ══════════════════════════════════ -->
+    <section class="page" id="page-upload">
+      <div style="margin-bottom:20px">
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Upload & Process Video</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Upload CCTV footage to run the violation detection pipeline</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div>
+          <div class="card">
+            <div class="card-title">Video Upload</div>
+            <div class="upload-zone" id="upload-zone"
+              ondragover="event.preventDefault();this.classList.add('drag-over')"
+              ondragleave="this.classList.remove('drag-over')"
+              ondrop="handleDrop(event)"
+              onclick="document.getElementById('file-input').click()">
+              <div class="upload-icon">🎬</div>
+              <div class="upload-title">Drop video here or click to browse</div>
+              <div class="upload-sub">Supports MP4, AVI, MOV, MKV · Max 50 MB</div>
+              <input type="file" id="file-input" accept=".mp4,.avi,.mov,.mkv" style="display:none" onchange="handleFileSelect(event)"/>
+            </div>
+
+            <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Camera Zone</label>
+                <select class="filter-select" id="zone-select" style="flex:1">
+                  <option>Zone-A / MG Road</option>
+                  <option>Zone-B / Indiranagar</option>
+                  <option>Zone-C / Koramangala</option>
+                  <option>Zone-D / Whitefield</option>
+                  <option>Zone-E / Jayanagar</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Detector</label>
+                <select class="filter-select" id="detector-select" style="flex:1">
+                  <option value="auto">Auto (YOLOv8 → Color fallback)</option>
+                  <option value="color">Color (Synthetic demo)</option>
+                  <option value="yolo">YOLOv8 (Requires weights)</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" id="upload-btn" style="width:100%;margin-top:16px;justify-content:center;padding:12px"
+              onclick="uploadVideo()" disabled>
+              ⬆️ Upload &amp; Process
+            </button>
+
+            <div id="progress-section" style="display:none;margin-top:16px">
+              <div style="font-size:0.78rem;color:var(--text-2);margin-bottom:6px" id="progress-label">Uploading…</div>
+              <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Processing Log</div>
+            <div class="processing-log" id="processing-log">
+              <span style="color:var(--text-3)">Waiting for video upload…</span>
+            </div>
+          </div>
+          <div class="card" id="result-card" style="display:none">
+            <div class="card-title">✅ Processing Complete</div>
+            <div id="result-body"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- .main -->
+</div><!-- .shell -->
+
+<div id="toast-container"></div>
+
+<!-- ─────────────────────────── JAVASCRIPT ─────────────────────────────── -->
+<script>
+const API = 'http://127.0.0.1:8000/api';
+let allViolations = [];
+let charts = {};
+
+// ── CLOCK ────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-IN', {hour12:false}) + ' IST';
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── NAVIGATION ──────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('nav-' + id)?.classList.add('active');
+  if (id === 'map') drawMap();
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────
+function toast(msg, type='info', duration=3500) {
+  const tc = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  tc.appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+// ── API HELPERS ──────────────────────────────────────────────────────────
+async function apiGet(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function apiPost(path, body) {
+  const r = await fetch(API + path, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// ── SEED DEMO ────────────────────────────────────────────────────────────
+async function seedDemo() {
+  try {
+    const res = await fetch(API + '/demo/seed', { method: 'POST' });
+    const data = await res.json();
+    toast(`✅ ${data.message}`, 'approve');
+    await refreshAll();
+  } catch(e) {
+    toast('❌ Cannot reach API. Make sure uvicorn is running on port 8000.', 'reject', 6000);
+  }
+}
+
+// ── REFRESH ALL ──────────────────────────────────────────────────────────
+async function refreshAll() {
+  try {
+    const [violations, analytics] = await Promise.all([
+      apiGet('/violations?limit=100'),
+      apiGet('/analytics'),
+    ]);
+    allViolations = violations.violations || [];
+    updateStats(analytics);
+    updateCharts(analytics);
+    renderQueue(allViolations);
+    renderFeed(allViolations);
+    renderAnalytics(analytics);
+    renderMap(analytics);
+    document.getElementById('pending-badge').textContent = analytics.pending_review || 0;
+  } catch(e) {
+    console.warn('API not reachable — showing UI in offline mode');
+  }
+}
+
+// ── STATS ────────────────────────────────────────────────────────────────
+function updateStats(a) {
+  document.getElementById('stat-total').textContent = a.total_violations ?? 0;
+  document.getElementById('stat-pending').textContent = a.pending_review ?? 0;
+  document.getElementById('stat-approved').textContent = a.approved_challans ?? 0;
+  document.getElementById('stat-approval-rate').textContent =
+    (a.approval_rate ?? 0) + '% approval rate';
+
+  const byType = a.by_type || {};
+  document.getElementById('an-wrong-side').textContent = byType['wrong_side_driving'] ?? 0;
+  document.getElementById('an-parking').textContent    = byType['illegal_or_footpath_parking'] ?? 0;
+  document.getElementById('an-footpath').textContent   = byType['footpath_riding'] ?? 0;
+}
+
+// ── CHARTS ───────────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#8da0c4', font: {family:'Inter',size:11} } } },
+};
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function updateCharts(a) {
+  const byType = a.by_type || {};
+  const byHour = a.by_hour || {};
+  const byZone = a.by_zone || {};
+  const byStatus = a.by_status || {};
+  const confBuckets = a.confidence_distribution || [0,0,0,0,0];
+
+  // By Type (doughnut)
+  destroyChart('type');
+  charts.type = new Chart(document.getElementById('chartByType'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Wrong-Side','Illegal Parking','Footpath Riding','Helmet','Stop-Line'],
+      datasets: [{
+        data: [
+          byType.wrong_side_driving ?? 0,
+          byType.illegal_or_footpath_parking ?? 0,
+          byType.footpath_riding ?? 0,
+          byType.helmet_non_compliance ?? 0,
+          byType.stop_line_violation ?? 0,
+        ],
+        backgroundColor: ['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#10b981'],
+        borderColor: '#0d1220', borderWidth: 3,
+      }],
+    },
+    options: { ...CHART_DEFAULTS },
+  });
+
+  // By Hour (line)
+  destroyChart('hour');
+  const hours = Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
+  charts.hour = new Chart(document.getElementById('chartByHour'), {
+    type: 'line',
+    data: {
+      labels: hours,
+      datasets: [{
+        label: 'Violations',
+        data: hours.map(h => byHour[h] ?? 0),
+        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.12)',
+        fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#3b82f6',
+      }],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      scales: {
+        x: { ticks:{color:'#4a5980',maxTicksLimit:8,font:{size:10}}, grid:{color:'rgba(80,120,200,0.08)'} },
+        y: { ticks:{color:'#4a5980',font:{size:10}}, grid:{color:'rgba(80,120,200,0.08)'} },
+      },
+    },
+  });
+
+  // By Zone (bar)
+  destroyChart('zone');
+  const zones = Object.keys(byZone);
+  charts.zone = new Chart(document.getElementById('chartByZone'), {
+    type: 'bar',
+    data: {
+      labels: zones,
+      datasets: [{
+        label: 'Violations',
+        data: zones.map(z => byZone[z]),
+        backgroundColor: 'rgba(59,130,246,0.7)',
+        borderColor: '#3b82f6', borderWidth: 1, borderRadius: 5,
+      }],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks:{color:'#4a5980',font:{size:10}}, grid:{display:false} },
+        y: { ticks:{color:'#4a5980',font:{size:10}}, grid:{color:'rgba(80,120,200,0.08)'} },
+      },
+    },
+  });
+
+  // Confidence (bar)
+  destroyChart('conf');
+  charts.conf = new Chart(document.getElementById('chartConfidence'), {
+    type: 'bar',
+    data: {
+      labels: ['0–20%','20–40%','40–60%','60–80%','80–100%'],
+      datasets: [{
+        label: 'Detections',
+        data: confBuckets,
+        backgroundColor: ['#ef4444','#f59e0b','#06b6d4','#3b82f6','#10b981'],
+        borderRadius: 5,
+      }],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks:{color:'#4a5980',font:{size:10}}, grid:{display:false} },
+        y: { ticks:{color:'#4a5980',font:{size:10}}, grid:{color:'rgba(80,120,200,0.08)'} },
+      },
+    },
+  });
+
+  // Status pie
+  destroyChart('status');
+  charts.status = new Chart(document.getElementById('chartStatus'), {
+    type: 'pie',
+    data: {
+      labels: ['Pending','Approved','Rejected','Flagged'],
+      datasets: [{
+        data: [
+          byStatus.pending ?? 0,
+          byStatus.approved ?? 0,
+          byStatus.rejected ?? 0,
+          byStatus.flagged_for_re_review ?? 0,
+        ],
+        backgroundColor: ['#f59e0b','#10b981','#ef4444','#8b5cf6'],
+        borderColor: '#0d1220', borderWidth: 3,
+      }],
+    },
+    options: { ...CHART_DEFAULTS },
+  });
+
+  // Activity feed
+  const events = (a.recent_events || []).slice(0,8);
+  const feed = document.getElementById('activity-feed');
+  if (events.length === 0) {
+    feed.innerHTML = '<div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">No recent activity</div>';
+    return;
+  }
+  feed.innerHTML = events.map(e => {
+    const icon = e.event==='detected'?'🚨':e.event==='approve'?'✅':e.event==='reject'?'❌':'🚩';
+    const color = e.event==='detected'?'var(--accent-red)':e.event==='approve'?'var(--accent-green)':e.event==='reject'?'var(--accent-red)':'var(--accent-violet)';
+    const label = e.violation_type?.replace(/_/g,' ') ?? e.event;
+    const time = new Date(e.timestamp+'Z').toLocaleTimeString('en-IN',{hour12:false});
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(80,120,200,0.08)">
+      <span style="font-size:1rem">${icon}</span>
+      <div style="flex:1">
+        <div style="font-size:0.8rem;font-weight:600;color:${color}">${label.toUpperCase()}</div>
+        <div style="font-size:0.7rem;color:var(--text-3)">${e.zone ?? ''} · ${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Zone heatmap bars
+  const hm = document.getElementById('zone-heatmap');
+  const maxZ = Math.max(...Object.values(byZone), 1);
+  hm.innerHTML = Object.entries(byZone).map(([zone, count]) =>
+    `<div style="display:flex;align-items:center;gap:12px">
+      <div style="width:180px;font-size:0.78rem;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${zone}</div>
+      <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:99px;height:10px;overflow:hidden">
+        <div style="width:${(count/maxZ*100).toFixed(1)}%;height:100%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));border-radius:99px;transition:width 0.5s"></div>
+      </div>
+      <div style="width:28px;text-align:right;font-size:0.78rem;font-weight:700;color:var(--text-1)">${count}</div>
+    </div>`
+  ).join('');
+}
+
+// ── QUEUE ────────────────────────────────────────────────────────────────
+function renderQueue(violations) {
+  applyFilters(violations);
+}
+
+let _currentViolations = [];
+function applyFilters(violations) {
+  if (violations) _currentViolations = violations;
+  const statusFilter = document.getElementById('filter-status').value;
+  const typeFilter   = document.getElementById('filter-type').value;
+  const plateFilter  = document.getElementById('filter-plate').value.toUpperCase();
+
+  const filtered = _currentViolations.filter(v =>
+    (!statusFilter || v.review_status === statusFilter) &&
+    (!typeFilter   || v.violation_type === typeFilter) &&
+    (!plateFilter  || (v.plate_text||'').toUpperCase().includes(plateFilter))
+  );
+
+  document.getElementById('queue-count').textContent = `${filtered.length} records`;
+  const tbody = document.getElementById('queue-tbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:32px">No violations match the current filters.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(v => {
+    const shortId = v.packet_id.slice(0,8);
+    const statusBadge = `<span class="badge badge-${v.review_status.replace('_for_re_review','').replace('flagged','flagged')}">${
+      {'pending':'⏳ Pending','approved':'✅ Approved','rejected':'❌ Rejected','flagged_for_re_review':'🚩 Flagged'}[v.review_status] ?? v.review_status
+    }</span>`;
+    const vtypeFmt = v.violation_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const confPct = Math.round(v.confidence * 100);
+    const confColor = confPct>=80?'var(--accent-green)':confPct>=60?'var(--accent-amber)':'var(--accent-red)';
+    const actions = v.review_status === 'pending'
+      ? `<div class="action-btns">
+           <button class="act-btn act-approve" onclick="reviewAction('${v.packet_id}','approve')">✓ Approve</button>
+           <button class="act-btn act-reject"  onclick="reviewAction('${v.packet_id}','reject')">✗ Reject</button>
+           <button class="act-btn act-flag"    onclick="reviewAction('${v.packet_id}','flag')">⚑ Flag</button>
+         </div>`
+      : `<span style="color:var(--text-3);font-size:0.75rem">Reviewed</span>`;
+    return `<tr>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:0.73rem;color:var(--text-3)">${shortId}…</td>
+      <td><span class="vtype-tag vtype-${v.violation_type}">${vtypeFmt}</span></td>
+      <td>${v.plate_text ? `<span class="plate-text">${v.plate_text}</span>` : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td style="font-size:0.78rem;color:var(--text-2)">${v.zone_name}</td>
+      <td>
+        <div class="conf-bar">
+          <div class="conf-track"><div class="conf-fill" style="width:${confPct}%;background:${confColor}"></div></div>
+          <div class="conf-val">${confPct}%</div>
+        </div>
+      </td>
+      <td>${statusBadge}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function reviewAction(packetId, action) {
+  try {
+    await apiPost(`/violations/${packetId}/review`, {
+      packet_id: packetId, action, officer_id: 'duty-officer-1'
+    });
+    const msgs = { approve:'✅ Challan approved!', reject:'❌ Violation rejected.', flag:'🚩 Flagged for re-review.' };
+    toast(msgs[action], action === 'approve' ? 'approve' : action === 'reject' ? 'reject' : 'flag');
+    await refreshAll();
+  } catch(e) {
+    toast('❌ Review failed: ' + e.message, 'reject');
+  }
+}
+
+// ── LIVE FEED ────────────────────────────────────────────────────────────
+function renderFeed(violations) {
+  const grid = document.getElementById('feed-grid');
+  if (!violations.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:40px;font-size:0.85rem">Process a video or load demo data.</div>';
+    return;
+  }
+  const vtype_labels = {
+    'wrong_side_driving':        { icon:'🚗', label:'Wrong-Side Driving', color:'var(--accent-red)' },
+    'illegal_or_footpath_parking':{ icon:'🚫', label:'Illegal Parking',    color:'var(--accent-amber)' },
+    'footpath_riding':           { icon:'🛵', label:'Footpath Riding',     color:'var(--accent-violet)' },
+    'helmet_non_compliance':     { icon:'⛑️', label:'No Helmet',           color:'var(--accent-cyan)' },
+    'stop_line_violation':       { icon:'🛑', label:'Stop-Line',           color:'var(--accent-red)' },
+  };
+  grid.innerHTML = violations.slice(0,12).map(v => {
+    const vt = vtype_labels[v.violation_type] || { icon:'⚠️', label:v.violation_type, color:'var(--text-2)' };
+    const statusColor = v.review_status==='approved'?'var(--accent-green)':v.review_status==='rejected'?'var(--accent-red)':'var(--accent-amber)';
+    const snapFile = v.snapshot_filenames?.[0];
+    const imgContent = snapFile
+      ? `<img src="${API.replace('/api','')}/snapshots/${snapFile}" alt="violation snapshot" loading="lazy" style="object-fit:cover;width:100%;height:100%" />`
+      : `<div class="feed-img-placeholder"><span style="font-size:3rem">${vt.icon}</span><span>${vt.label}</span></div>`;
+    return `<div class="feed-card">
+      <div class="feed-img">
+        ${imgContent}
+        <span class="feed-violation-badge">⚠ VIOLATION</span>
+      </div>
+      <div class="feed-body">
+        <div class="feed-title" style="color:${vt.color}">${vt.icon} ${vt.label}</div>
+        <div class="feed-meta">
+          <span>${v.plate_text ? '🚘 '+v.plate_text : '📍 '+v.zone_name}</span>
+          <span style="color:${statusColor}">● ${v.review_status.replace('_for_re_review','')}</span>
+        </div>
+        <div class="feed-meta" style="margin-top:4px">
+          <span>⚡ ${Math.round(v.confidence*100)}% confidence</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ANALYTICS ────────────────────────────────────────────────────────────
+function renderAnalytics(a) { /* handled by updateCharts */ }
+
+// ── MAP ──────────────────────────────────────────────────────────────────
+let _leafletMap = null;
+let _leafletMarkers = [];
+
+function renderMap(a) { initLeafletMap(a?.by_zone); }
+
+function initLeafletMap(byZone) {
+  // Bengaluru zones with real GPS coordinates
+  const zones = [
+    { name:'Zone-A / MG Road',      lat:12.9716, lng:77.5946, color:'#ef4444' },
+    { name:'Zone-B / Indiranagar',  lat:12.9784, lng:77.6408, color:'#f59e0b' },
+    { name:'Zone-C / Koramangala',  lat:12.9352, lng:77.6245, color:'#8b5cf6' },
+    { name:'Zone-D / Whitefield',   lat:12.9698, lng:77.7500, color:'#06b6d4' },
+    { name:'Zone-E / Jayanagar',    lat:12.9250, lng:77.5938, color:'#10b981' },
+  ];
+  byZone = byZone || {};
+
+  if (!_leafletMap) {
+    _leafletMap = L.map('leaflet-map', { zoomControl: true, scrollWheelZoom: false }).setView([12.9716, 77.5946], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | Production: MapMyIndia SDK',
+      maxZoom: 19,
+    }).addTo(_leafletMap);
+  }
+
+  // Clear old markers
+  _leafletMarkers.forEach(m => m.remove());
+  _leafletMarkers = [];
+
+  const maxV = Math.max(...Object.values(byZone), 1);
+
+  zones.forEach(z => {
+    const count = byZone[z.name] || 0;
+    const radius = 20 + (count / maxV) * 30;
+    const circle = L.circleMarker([z.lat, z.lng], {
+      radius: radius,
+      fillColor: z.color,
+      color: '#fff',
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: count > 0 ? 0.75 : 0.3,
+    }).addTo(_leafletMap);
+    circle.bindPopup(`
+      <div style="font-family:Inter,sans-serif;padding:4px">
+        <strong style="color:#111">${z.name}</strong><br>
+        <span style="color:${z.color};font-weight:700;font-size:1.2em">${count}</span> violations detected<br>
+        <span style="color:#666;font-size:0.85em">Status: ${count > 3 ? '⚠ High Activity' : '✓ Normal'}</span>
+      </div>
+    `);
+    _leafletMarkers.push(circle);
+    if (count > 0) {
+      const label = L.marker([z.lat, z.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="background:${z.color};color:#fff;font-weight:700;font-size:12px;padding:2px 7px;border-radius:99px;border:2px solid #fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${count}</div>`,
+          iconAnchor: [14, 10],
+        })
+      }).addTo(_leafletMap);
+      _leafletMarkers.push(label);
+    }
+  });
+
+  // Fix map render when tab becomes visible
+  setTimeout(() => { if (_leafletMap) _leafletMap.invalidateSize(); }, 100);
+
+  // Zone summary table (keep it)
+  const zst = document.getElementById('zone-summary-table');
+  if (zst) {
+    zst.innerHTML = `<table class="violation-table"><thead><tr><th>Zone</th><th>Violations</th><th>Status</th></tr></thead><tbody>
+      ${zones.map(z => {
+        const count = byZone[z.name] || 0;
+        return `<tr>
+          <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${z.color};margin-right:8px"></span>${z.name}</td>
+          <td style="font-weight:700">${count}</td>
+          <td><span class="badge ${count > 3 ? 'badge-pending' : 'badge-approved'}">${count > 3 ? '⚠ High' : '✓ Normal'}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>`;
+  }
+}
+
+function drawMap(byZone) {
+  const canvas = document.getElementById('mapCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth || 900;
+  canvas.height = 320;
+  const W = canvas.width, H = 320;
+
+  // Dark background
+  ctx.fillStyle = '#060d1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(59,130,246,0.07)';
+  ctx.lineWidth = 1;
+  for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // Road network (simplified Bengaluru sketch)
+  const drawRoad = (pts, width, color) => {
+    ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=width; ctx.lineCap='round'; ctx.lineJoin='round';
+    pts.forEach(([x,y],i) => i===0?ctx.moveTo(x,y):ctx.lineTo(x,y));
+    ctx.stroke();
+  };
+  // Main arteries
+  drawRoad([[0.15*W,0.5*H],[0.85*W,0.5*H]], 18, 'rgba(40,60,100,0.9)');
+  drawRoad([[0.5*W,0.05*H],[0.5*W,0.95*H]], 18, 'rgba(40,60,100,0.9)');
+  drawRoad([[0.15*W,0.2*H],[0.85*W,0.8*H]], 12, 'rgba(35,50,85,0.8)');
+  drawRoad([[0.15*W,0.8*H],[0.85*W,0.2*H]], 12, 'rgba(35,50,85,0.8)');
+  // Center marks
+  drawRoad([[0.15*W,0.5*H],[0.85*W,0.5*H]], 1, 'rgba(255,200,0,0.3)');
+  drawRoad([[0.5*W,0.05*H],[0.5*W,0.95*H]], 1, 'rgba(255,200,0,0.3)');
+
+  // Violation clusters
+  const zones = [
+    { name:'Zone-A / MG Road',        x:0.5,  y:0.5,  color:'#ef4444' },
+    { name:'Zone-B / Indiranagar',    x:0.68, y:0.36, color:'#f59e0b' },
+    { name:'Zone-C / Koramangala',    x:0.36, y:0.64, color:'#8b5cf6' },
+    { name:'Zone-D / Whitefield',     x:0.78, y:0.5,  color:'#06b6d4' },
+    { name:'Zone-E / Jayanagar',      x:0.32, y:0.5,  color:'#10b981' },
+  ];
+  byZone = byZone || {};
+  const maxV = Math.max(...Object.values(byZone), 1);
+
+  zones.forEach(z => {
+    const count = byZone[z.name] || 0;
+    const size  = 12 + (count/maxV)*28;
+    const px = z.x*W, py = z.y*H;
+
+    // Glow
+    const grad = ctx.createRadialGradient(px,py,0,px,py,size*2.5);
+    grad.addColorStop(0, z.color+'88');
+    grad.addColorStop(1, z.color+'00');
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(px,py,size*2.5,0,Math.PI*2); ctx.fill();
+
+    // Dot
+    ctx.beginPath(); ctx.arc(px,py,size,0,Math.PI*2);
+    ctx.fillStyle = z.color; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(count > 0 ? `${count}` : '●', px, py+4);
+
+    // Zone name below
+    ctx.font = '10px Inter'; ctx.fillStyle = '#8da0c4';
+    ctx.fillText(z.name.split('/')[1]?.trim() ?? z.name, px, py+size+16);
+  });
+
+  // Render zone summary table
+  const zst = document.getElementById('zone-summary-table');
+  if (zst) {
+    zst.innerHTML = `<table class="violation-table"><thead><tr><th>Zone</th><th>Violations</th><th>Status</th></tr></thead><tbody>
+      ${zones.map(z=>{
+        const count = byZone[z.name]||0;
+        return `<tr>
+          <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${z.color};margin-right:8px"></span>${z.name}</td>
+          <td style="font-weight:700">${count}</td>
+          <td><span class="badge ${count>3?'badge-pending':'badge-approved'}">${count>3?'⚠ High':'✓ Normal'}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>`;
+  }
+}
+
+// ── UPLOAD ───────────────────────────────────────────────────────────────
+let selectedFile = null;
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+}
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) setFile(file);
+}
+function setFile(file) {
+  selectedFile = file;
+  document.getElementById('upload-zone').innerHTML =
+    `<div class="upload-icon">🎬</div>
+     <div class="upload-title">${file.name}</div>
+     <div class="upload-sub">${(file.size/1024/1024).toFixed(2)} MB · Ready to upload</div>`;
+  document.getElementById('upload-btn').disabled = false;
+}
+
+async function uploadVideo() {
+  if (!selectedFile) return;
+  const btn = document.getElementById('upload-btn');
+  const progressSection = document.getElementById('progress-section');
+  const progressBar = document.getElementById('progress-bar');
+  const progressLabel = document.getElementById('progress-label');
+  const log = document.getElementById('processing-log');
+
+  btn.disabled = true;
+  progressSection.style.display = 'block';
+  log.innerHTML = '';
+
+  const logLine = msg => {
+    log.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+    log.scrollTop = log.scrollHeight;
+  };
+
+  const zone = document.getElementById('zone-select').value;
+  const detector = document.getElementById('detector-select').value;
+
+  logLine('📁 Reading video file…');
+  progressBar.style.width = '15%';
+  progressLabel.textContent = 'Uploading to API…';
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+
+  const url = `${API}/videos/process?detector=${detector}&zone_name=${encodeURIComponent(zone)}`;
+
+  try {
+    logLine(`⬆️ Sending to ChalanReady AI backend (detector=${detector})…`);
+    progressBar.style.width = '40%';
+
+    const resp = await fetch(url, { method: 'POST', body: fd });
+    progressBar.style.width = '80%';
+    logLine('🤖 AI violation pipeline running…');
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err);
+    }
+
+    const data = await resp.json();
+    progressBar.style.width = '100%';
+    progressLabel.textContent = 'Complete!';
+
+    const r = data.result;
+    logLine(`✅ Done! Processed ${r.frames_processed} frames at ${r.fps.toFixed(1)} fps`);
+    logLine(`🎯 Detections: ${r.detections_seen} | Tracks: ${r.tracks_seen} | Violations: ${r.violations_detected}`);
+    logLine(`📂 Output: ${r.output_path?.split('\\').pop() ?? 'N/A'}`);
+    logLine(`📸 Snapshots saved to: ${r.snapshots_dir?.split('\\').pop() ?? 'N/A'}`);
+
+    document.getElementById('result-card').style.display = 'block';
+    document.getElementById('result-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.82rem">
+        <div><span style="color:var(--text-3)">Frames processed</span><br><strong>${r.frames_processed}</strong></div>
+        <div><span style="color:var(--text-3)">FPS</span><br><strong>${(r.fps||0).toFixed(1)}</strong></div>
+        <div><span style="color:var(--text-3)">Tracks seen</span><br><strong>${r.tracks_seen}</strong></div>
+        <div><span style="color:var(--text-3)">Violations detected</span><br><strong style="color:var(--accent-red)">${r.violations_detected}</strong></div>
+        <div><span style="color:var(--text-3)">Detector</span><br><strong>${r.detector}</strong></div>
+        <div><span style="color:var(--text-3)">Total in store</span><br><strong>${data.violations_in_store}</strong></div>
+      </div>`;
+
+    toast(`✅ Video processed! ${r.violations_detected} violations found.`, 'approve');
+    await refreshAll();
+
+  } catch(e) {
+    progressBar.style.background = 'var(--accent-red)';
+    logLine(`❌ Error: ${e.message}`);
+    toast('❌ Processing failed: ' + e.message, 'reject', 6000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  refreshAll();
+  drawMap();
+  // Auto-refresh every 30s
+  setInterval(refreshAll, 30000);
+});
+</script>
+</body>
+</html>

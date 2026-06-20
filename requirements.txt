@@ -1,0 +1,11 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+opencv-python>=4.9.0
+numpy>=1.26.0
+pydantic>=2.7.0
+ultralytics>=8.2.0
+aiofiles>=23.2.1
+
+# OCR — install when connecting real plate reading:
+# easyocr>=1.7.1
