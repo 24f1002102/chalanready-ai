@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+*.db
+*.sqlite
+*.sqlite3
 
 # Generated demo media
 sample_data/videos/*.mp4

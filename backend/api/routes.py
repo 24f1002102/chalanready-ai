@@ -93,7 +93,7 @@ async def process_uploaded_video(
 async def analyze_image(
     file: UploadFile = File(...),
     zone_name: str = "Zone-A / MG Road",
-    detector: str = "auto",
+    detector: str = "color",
 ) -> dict[str, Any]:
     """
     Analyze a single traffic photo for violations.
@@ -133,23 +133,27 @@ async def analyze_image(
 
     # Stage 2 — Vehicle detection (single frame, color detector is fine for photos)
     from ..detection.detector import create_detector
-    det = create_detector(detector if detector != "auto" else "color")
+    det = create_detector(detector)
     detections = det.detect(preprocessed)
 
     # Stage 3 — Static violation checks
     _, parking_rule, footpath_rule, stopline_rule, helmet_rule, _, _ = _make_violation_rules(w, h)
 
+    from ..detection.violations.illegal_parking import point_in_polygon
     from ..detection.violations.redlight import is_red_signal
+    from ..ocr.plate_reader import PlateReader
 
     violations_found = []
     annotated = preprocessed.copy()
+    pending_packets: list[tuple[ViolationType, float, str]] = []
+    plate_reader = PlateReader()
 
     # Check signal state for red-light
     red_signal_active = is_red_signal(preprocessed)
 
-    for det_obj in detections:
-        x1, y1, x2, y2 = det_obj.x1, det_obj.y1, det_obj.x2, det_obj.y2
-        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    for idx, det_obj in enumerate(detections, start=1):
+        x1, y1, x2, y2 = det_obj.bbox
+        cx, cy = det_obj.center
         bbox = (x1, y1, x2, y2)
         class_name = det_obj.class_name
 
@@ -167,17 +171,18 @@ async def analyze_image(
         ):
             detected_vtypes.append((ViolationType.helmet, 0.72))
 
-        # Footpath check
-        if footpath_rule.observe(track_id=1, center=(cx, cy)):
+        # Footpath check: static proxy for a vehicle inside the calibrated zone.
+        if point_in_polygon((cx, cy), footpath_rule.footpath_zone):
             detected_vtypes.append((ViolationType.footpath_riding, 0.81))
 
-        # Parking zone check
-        if parking_rule.observe(track_id=1, center=(cx, cy)):
+        # Parking-zone check: photo evidence can show a restricted-zone hit;
+        # true dwell time still requires video.
+        if point_in_polygon((cx, cy), parking_rule.restricted_zone):
             detected_vtypes.append((ViolationType.illegal_parking, 0.85))
 
-        # Stop-line check (vehicle bbox bottom crosses stop-line)
-        stop_y = int(h * 0.49)  # default stop-line position
-        if y2 >= stop_y:
+        # Stop-line check: bbox overlaps the configured stop line.
+        stop_y = stopline_rule.stop_line_y
+        if y1 <= stop_y <= y2:
             detected_vtypes.append((ViolationType.stopline, 0.78))
             # Red-light: stop-line crossed AND signal is red
             if red_signal_active:
@@ -190,27 +195,40 @@ async def analyze_image(
             cv2.putText(annotated, label, (x1, y2 + 16),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1, cv2.LINE_AA)
 
-            # Auto-save to violation store
-            from ..ocr.plate_reader import PlateReader
-            plate = PlateReader().read_for_track(abs(hash(str(bbox))) % 100)
-            packet = build_candidate_packet(
-                violation_type=vtype,
-                confidence=conf,
-                timestamp_seconds=time.time(),
-                zone_name=zone_name,
-                evidence_paths=[],
-                plate_text=plate.text,
-            )
-            store.add(packet)
+            plate = plate_reader.read_for_track(idx, preprocessed, bbox)
+            pending_packets.append((vtype, conf, plate.text))
             violations_found.append({
                 "violation_type": vtype.value,
                 "confidence": conf,
                 "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
                 "class_name": class_name,
-                "packet_id": packet.packet_id,
+                "packet_id": None,
                 "plate": plate.text,
                 "plate_source": plate.source,
             })
+
+    if pending_packets:
+        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        safe_stem = Path(file.filename or "photo").stem[:40] or "photo"
+        evidence_path = SNAPSHOTS_DIR / f"image_{safe_stem}_{uuid4().hex[:8]}.jpg"
+        cv2.imwrite(str(evidence_path), annotated)
+
+        packet_ids: list[str] = []
+        for vtype, conf, plate_text in pending_packets:
+            packet = build_candidate_packet(
+                violation_type=vtype,
+                confidence=conf,
+                timestamp_seconds=time.time(),
+                zone_name=zone_name,
+                evidence_paths=[str(evidence_path)],
+                plate_text=plate_text,
+            )
+            store.add(packet)
+            packet_ids.append(packet.packet_id)
+
+        for item, packet_id in zip(violations_found, packet_ids):
+            item["packet_id"] = packet_id
+            item["snapshot_filename"] = evidence_path.name
 
     # Encode annotated image to base64
     success, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 88])

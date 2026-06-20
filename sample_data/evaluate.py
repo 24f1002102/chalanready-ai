@@ -46,14 +46,17 @@ GROUND_TRUTH = {
 def evaluate(detector: str = "color") -> dict:
     video_path = ROOT / "sample_data" / "videos" / "synthetic_stage1.mp4"
     output_path = ROOT / "sample_data" / "eval_output" / "eval_annotated.mp4"
+    eval_db_path = ROOT / "sample_data" / "eval_output" / "eval.sqlite3"
 
     if not video_path.exists():
         print(f"[ERROR] Video not found: {video_path}")
         print("  Run:  python sample_data/create_synthetic_video.py")
         sys.exit(1)
 
-    # Use a real ViolationsStore so we capture per-type violation counts
-    store = ViolationsStore()
+    # Use an isolated SQLite store so app/demo data cannot pollute metrics.
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    store = ViolationsStore(eval_db_path)
+    store.clear()
 
     print(f"\nRunning pipeline on: {video_path.name}  (detector={detector})")
     result = process_video(

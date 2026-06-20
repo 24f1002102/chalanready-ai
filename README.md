@@ -101,6 +101,7 @@ Video File / RTSP Stream
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET`  | `/api/health` | System health |
+| `POST` | `/api/images/analyze` | Upload & analyze a single traffic photo |
 | `POST` | `/api/videos/process` | Upload & process video |
 | `GET`  | `/api/violations` | List violations (filterable) |
 | `POST` | `/api/violations/{id}/review` | Officer approve/reject/flag |
@@ -123,7 +124,7 @@ chalanready-ai/
 │   ├── evidence/packet_builder.py
 │   ├── models/schemas.py      # Pydantic data models
 │   ├── ocr/plate_reader.py    # EasyOCR + synthetic demo fallback
-│   ├── violations_store.py    # In-memory store + analytics
+│   ├── violations_store.py    # SQLite-backed store + analytics
 │   ├── pipeline.py            # Main processing pipeline + CLAHE
 │   └── main.py                # FastAPI app
 ├── frontend/

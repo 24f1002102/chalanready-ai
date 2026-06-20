@@ -170,15 +170,16 @@ The FastAPI + Pydantic + async design makes the transition to production straigh
 
 ## 9. AI Performance Metrics
 
-Evaluated on Bengaluru Traffic Police ASTraM validation dataset:
+Evaluated with `sample_data/evaluate.py` on the offline synthetic CCTV dataset:
 
-| Metric | Score |
-|--------|-------|
-| Precision | 87.3% |
-| Recall | 83.1% |
-| F1-Score | 85.1% |
-| mAP@0.5 | 79.4% |
-| Processing speed | ~18 FPS (CPU) / ~45 FPS (GPU) |
+| Metric | Score | Scope |
+|--------|-------|-------|
+| Precision | 100% | 3 scripted violations |
+| Recall | 100% | 3 scripted violations |
+| F1-Score | 100% | 3 scripted violations |
+| Processing speed | ~18 FPS | Synthetic CPU demo |
+
+Production metrics require real BTP CCTV footage with human-annotated ground truth.
 
 ---
 

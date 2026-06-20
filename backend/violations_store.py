@@ -5,7 +5,7 @@ Survives server restarts, cloud deployments, Railway sleeps.
 Keeps the same API surface as the original in-memory store so zero
 changes needed in routes.py or anywhere else.
 
-DB file: PROJECT_ROOT/chalanready.db
+DB file: PROJECT_ROOT/sample_data/outputs/chalanready.db
 """
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from typing import Any
 from .models.schemas import ReviewAction, ReviewStatus, ViolationPacket, ViolationType
 
 
-# Store database next to project root so it persists across restarts
-_DB_PATH = Path(__file__).resolve().parents[1] / "chalanready.db"
+# Store database in generated outputs so local demo data is not committed.
+_DB_PATH = Path(__file__).resolve().parents[1] / "sample_data" / "outputs" / "chalanready.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS violations (
@@ -64,6 +64,7 @@ class ViolationsStore:
         self._init_db()
 
     def _init_db(self) -> None:
+        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
 
