@@ -405,7 +405,7 @@ def annotate_frame(
             "stopline": "STOP-LINE",
             "helmet": "NO HELMET",
         }
-        vtext = f"⚠ {label_map.get(vtype, vtype)} | {plate}"
+        vtext = f"[!] {label_map.get(vtype, vtype)} | {plate}"
         bx = w - 340
         by = 70 + i * 42
         cv2.rectangle(annotated, (bx - 6, by - 26), (w - 6, by + 12), (0, 0, 180), -1)

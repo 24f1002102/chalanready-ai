@@ -1,0 +1,46 @@
+{
+  "detector": "color",
+  "dataset": "synthetic_stage1.mp4 (150 frames @ 18fps)",
+  "frames_processed": 150,
+  "macro_precision": 1.0,
+  "macro_recall": 1.0,
+  "macro_f1": 1.0,
+  "per_type": {
+    "footpath_riding": {
+      "ground_truth": 1,
+      "detected": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "wrong_side_driving": {
+      "ground_truth": 1,
+      "detected": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "illegal_or_footpath_parking": {
+      "ground_truth": 1,
+      "detected": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "stop_line_violation": {
+      "ground_truth": 0,
+      "detected": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "helmet_non_compliance": {
+      "ground_truth": 0,
+      "detected": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "note": "Evaluated on offline synthetic dataset (create_synthetic_video.py). Production evaluation requires real BTP CCTV footage with human-annotated ground truth."
+}

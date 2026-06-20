@@ -10,15 +10,21 @@
 
 ## 🎯 What It Does
 
-ChalanReady AI automatically detects 5 traffic violation types from CCTV footage and presents them to officers for review. **No challan is issued without human approval.**
+ChalanReady AI automatically detects traffic violations from CCTV footage and presents them to officers for review. **No challan is issued without human approval.**
 
-| Violation | Method |
-|-----------|--------|
-| ✅ Wrong-side driving | Trajectory vector cosine similarity |
-| ✅ Illegal parking | Zone polygon + dwell-time |
-| ✅ Footpath riding | Zone polygon entry counting |
-| ✅ Helmet non-compliance | Head-zone skin-tone analysis |
-| ✅ Stop-line violation | Y-coordinate crossing + signal phase |
+**3 fully-implemented violation types** (rule-engine verified on synthetic dataset):
+
+| Violation | Method | Status |
+|-----------|--------|--------|
+| Wrong-side driving | Trajectory vector cosine similarity | **Live** |
+| Illegal parking | Zone polygon + dwell-time (45 frames) | **Live** |
+| Footpath riding | Zone polygon entry counting | **Live** |
+| Helmet non-compliance | Head-zone HSV skin-tone heuristic | Live (heuristic) |
+| Stop-line violation | Y-coordinate crossing + signal phase | Requires red-phase input |
+| Seatbelt non-compliance | Pose-based keypoint analysis | Stub — needs YOLOv8-pose |
+| Triple riding | Multi-person head detection | Stub — needs labeled dataset |
+
+> **Evaluation**: Run `python sample_data/evaluate.py` for reproducible Precision / Recall / F1 on the synthetic dataset.
 
 ---
 
@@ -78,13 +84,14 @@ uvicorn backend.main:app --reload
 
 ```
 Video File / RTSP Stream
-  → YOLOv8n Detector (color fallback for demo)
-  → Centroid Multi-Object Tracker
-  → Violation Rule Engine (5 violation types)
-  → License Plate OCR (EasyOCR / synthetic demo)
-  → Evidence Packet Builder (annotated JPEG + metadata)
-  → ⚠️ OFFICER REVIEW QUEUE ← Human Gate
-  → Approved Challan → BTP System
+  -> Stage 1: CLAHE Preprocessing + Gaussian Denoise
+  -> YOLOv8n Detector (color-HSV fallback for synthetic demo)
+  -> Centroid Multi-Object Tracker
+  -> Violation Rule Engine (3 active types + 2 documented stubs)
+  -> License Plate OCR (EasyOCR if installed / synthetic demo fallback)
+  -> Evidence Packet Builder (annotated JPEG + metadata)
+  -> OFFICER REVIEW QUEUE  <-- Human Gate (no auto-challan)
+  -> Approved Challan -> BTP System
 ```
 
 ---
@@ -112,21 +119,23 @@ chalanready-ai/
 │   ├── detection/
 │   │   ├── detector.py        # YOLOv8 + color detector
 │   │   ├── tracker.py         # Centroid tracker
-│   │   └── violations/        # Rule engine (5 types)
+│   │   └── violations/        # Rule engine (3 active + 2 stubs)
 │   ├── evidence/packet_builder.py
 │   ├── models/schemas.py      # Pydantic data models
-│   ├── ocr/plate_reader.py    # License plate reader
+│   ├── ocr/plate_reader.py    # EasyOCR + synthetic demo fallback
 │   ├── violations_store.py    # In-memory store + analytics
-│   ├── pipeline.py            # Main processing pipeline
+│   ├── pipeline.py            # Main processing pipeline + CLAHE
 │   └── main.py                # FastAPI app
 ├── frontend/
 │   └── dashboard.html         # Full officer command center
 ├── sample_data/
 │   ├── create_synthetic_video.py
+│   ├── evaluate.py            # Reproducible eval script
 │   ├── videos/                # Input videos
 │   └── outputs/               # Annotated videos + snapshots
 ├── CONCEPT_NOTE.md            # Full project concept note
-├── requirements.txt
+├── requirements.txt           # Cloud deployment (no ultralytics)
+├── requirements-local.txt     # Local dev (adds ultralytics/YOLOv8)
 └── start.bat                  # One-click launcher
 ```
 
@@ -134,12 +143,17 @@ chalanready-ai/
 
 ## 🧠 AI Performance
 
-| Metric | Score |
-|--------|-------|
-| Precision | 87.3% |
-| Recall | 83.1% |
-| F1-Score | 85.1% |
-| mAP@0.5 | 79.4% |
+Evaluated on offline synthetic dataset (`sample_data/evaluate.py`):
+
+| Metric | Score | Dataset |
+|--------|-------|---------|
+| Precision (macro) | 100% | Synthetic (3 violations, controlled GT) |
+| Recall (macro) | 100% | Synthetic (3 violations, controlled GT) |
+| F1-Score (macro) | 100% | Synthetic (3 violations, controlled GT) |
+
+> **Note**: Synthetic dataset metrics reflect controlled conditions.
+> Production evaluation requires real BTP CCTV footage with human-annotated ground truth.
+> Run `python sample_data/evaluate.py` to reproduce.
 
 ---
 
