@@ -10,7 +10,7 @@ class FootpathRidingRule:
     footpath_zone: list[Point]
     min_inside_frames: int = 5
     allowed_classes: set[str] = field(
-        default_factory=lambda: {"bicycle", "motorcycle", "car", "truck", "bus"}
+        default_factory=lambda: {"bicycle", "motorcycle"}  # Only two-wheelers on footpaths
     )
     inside_counts: dict[int, int] = field(default_factory=dict)
 

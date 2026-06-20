@@ -7,14 +7,14 @@ from pydantic import BaseModel, Field
 
 
 class ViolationType(str, Enum):
-    wrong_side       = "wrong_side_driving"
-    illegal_parking  = "illegal_or_footpath_parking"
-    footpath_riding  = "footpath_riding"
-    helmet           = "helmet_non_compliance"
-    stopline         = "stop_line_violation"
-    red_light        = "red_light_violation"
-    triple_riding    = "triple_riding"
-    seatbelt         = "seatbelt_non_compliance"
+    wrong_side_driving        = "wrong_side_driving"
+    illegal_parking           = "illegal_or_footpath_parking"
+    footpath_riding           = "footpath_riding"
+    helmet                    = "helmet_non_compliance"
+    stopline                  = "stop_line_violation"
+    red_light                 = "red_light_violation"
+    triple_riding             = "triple_riding"
+    seatbelt                  = "seatbelt_non_compliance"
 
 
 class ReviewStatus(str, Enum):

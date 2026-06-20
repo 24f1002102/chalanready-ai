@@ -164,9 +164,9 @@ async def analyze_image(
 
         detected_vtypes = []
 
-        # Helmet check
+        # Helmet check — use idx as unique per-vehicle ID (not 1 for all)
         if helmet_rule.observe(
-            track_id=1, class_name=class_name, track_age=15,
+            track_id=idx, class_name=class_name, track_age=15,
             bbox=bbox, frame=preprocessed
         ):
             detected_vtypes.append((ViolationType.helmet, 0.72))
@@ -346,13 +346,13 @@ def seed_demo_violations() -> dict[str, Any]:
     rng = random.Random(42)
 
     demo_violations = [
-        (ViolationType.wrong_side,    0.87, "Zone-B / Indiranagar",    "KA01AB2341"),
+        (ViolationType.wrong_side_driving,    0.87, "Zone-B / Indiranagar",    "KA01AB2341"),
         (ViolationType.illegal_parking, 0.91, "Zone-A / MG Road",     "KA03MN5512"),
         (ViolationType.footpath_riding, 0.79, "Zone-C / Koramangala", "KA05PQ7823"),
-        (ViolationType.wrong_side,    0.83, "Zone-D / Whitefield",     "TN07RS4490"),
+        (ViolationType.wrong_side_driving,    0.83, "Zone-D / Whitefield",     "TN07RS4490"),
         (ViolationType.illegal_parking, 0.93, "Zone-B / Indiranagar", "KA41CD1234"),
         (ViolationType.footpath_riding, 0.76, "Zone-A / MG Road",     "MH12XY9900"),
-        (ViolationType.wrong_side,    0.88, "Zone-C / Koramangala",    "KA02EF3344"),
+        (ViolationType.wrong_side_driving,    0.88, "Zone-C / Koramangala",    "KA02EF3344"),
         (ViolationType.illegal_parking, 0.85, "Zone-D / Whitefield",  "KA50GH7721"),
     ]
 

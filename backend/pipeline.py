@@ -72,7 +72,7 @@ _DEFAULT_STOP_LINE_Y = 265                 # horizontal dashed line in demo
 
 # ───────────────────────── image preprocessing ───────────────────────────────
 
-_CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+# CLAHE created per-call in preprocess_frame() for thread safety (concurrent uploads)
 
 
 def preprocess_frame(frame: np.ndarray) -> np.ndarray:
@@ -88,10 +88,13 @@ def preprocess_frame(frame: np.ndarray) -> np.ndarray:
       4. Gentle Gaussian denoise to reduce compression artefacts
 
     At typical CCTV 720p resolution this runs in <1ms per frame on CPU.
+    Note: CLAHE is instantiated per-call to avoid thread-safety issues under
+    concurrent video uploads.
     """
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
     l_ch, a_ch, b_ch = cv2.split(lab)
-    l_eq = _CLAHE.apply(l_ch)
+    l_eq = clahe.apply(l_ch)
     lab_eq = cv2.merge([l_eq, a_ch, b_ch])
     enhanced = cv2.cvtColor(lab_eq, cv2.COLOR_LAB2BGR)
     # Light Gaussian blur to suppress JPEG / compression noise
@@ -139,6 +142,8 @@ def process_video(
     red_phase_frames: set[int] | None = None,
     store=None,         # optional ViolationsStore to persist packets
 ) -> dict[str, Any]:
+    import time as _time
+    _start_wall_time = _time.time()  # wall-clock start for correct violation timestamps
 
     input_path = Path(input_path)
     if not input_path.exists():
@@ -222,9 +227,9 @@ def process_video(
                     )
                     if store:
                         packet = build_candidate_packet(
-                            violation_type=ViolationType.wrong_side,
+                            violation_type=ViolationType.wrong_side_driving,
                             confidence=0.81,
-                            timestamp_seconds=frames_processed / fps,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
@@ -244,7 +249,7 @@ def process_video(
                         packet = build_candidate_packet(
                             violation_type=ViolationType.illegal_parking,
                             confidence=0.88,
-                            timestamp_seconds=frames_processed / fps,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
@@ -264,7 +269,7 @@ def process_video(
                         packet = build_candidate_packet(
                             violation_type=ViolationType.footpath_riding,
                             confidence=0.85,
-                            timestamp_seconds=frames_processed / fps,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
@@ -287,7 +292,7 @@ def process_video(
                         packet = build_candidate_packet(
                             violation_type=ViolationType.stopline,
                             confidence=0.84,
-                            timestamp_seconds=frames_processed / fps,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
@@ -309,7 +314,7 @@ def process_video(
                         packet = build_candidate_packet(
                             violation_type=ViolationType.helmet,
                             confidence=0.76,
-                            timestamp_seconds=frames_processed / fps,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
@@ -322,11 +327,21 @@ def process_video(
                     tid, track.class_name, track.age, preprocessed
                 ):
                     flagged.add("seatbelt")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "seatbelt", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         preprocessed, track, "Seatbelt Non-Compliance", snapshots_dir, frames_processed
                     )
+                    if store:
+                        packet = build_candidate_packet(
+                            violation_type=ViolationType.seatbelt,
+                            confidence=0.70,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
+                            zone_name=zone_name,
+                            evidence_paths=[snap_path],
+                            plate_text=plate,
+                        )
+                        store.add(packet)
                     violations_detected += 1
 
                 # ── Triple riding (stub — production: multi-person head count) ─
@@ -334,11 +349,21 @@ def process_video(
                     tid, track.class_name, track.age, preprocessed
                 ):
                     flagged.add("triple")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "triple", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         preprocessed, track, "Triple Riding", snapshots_dir, frames_processed
                     )
+                    if store:
+                        packet = build_candidate_packet(
+                            violation_type=ViolationType.triple_riding,
+                            confidence=0.70,
+                            timestamp_seconds=_start_wall_time + frames_processed / fps,
+                            zone_name=zone_name,
+                            evidence_paths=[snap_path],
+                            plate_text=plate,
+                        )
+                        store.add(packet)
                     violations_detected += 1
 
             annotated = annotate_frame(

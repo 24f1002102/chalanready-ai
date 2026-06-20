@@ -14,8 +14,11 @@ class WrongSideRule:
         if len(centers) < self.min_points:
             return False
 
-        start = centers[0]
-        end = centers[-1]
+        # Use only the most recent window for direction — avoids dilution
+        # by earlier legal-direction travel on long tracks.
+        recent = centers[-self.min_points:]
+        start = recent[0]
+        end = recent[-1]
         movement = (float(end[0] - start[0]), float(end[1] - start[1]))
         movement_length = hypot(*movement)
         allowed_length = hypot(*self.allowed_direction)
@@ -29,3 +32,4 @@ class WrongSideRule:
         )
         cosine = dot / (movement_length * allowed_length)
         return cosine <= self.opposite_threshold
+

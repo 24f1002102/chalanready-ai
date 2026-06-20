@@ -184,7 +184,11 @@ class ViolationsStore:
             by_type[p.violation_type.value] += 1
             by_status[p.review_status.value] += 1
             by_zone[p.zone_name] += 1
-            hour_key = str(int(p.timestamp_seconds // 3600) % 24).zfill(2) + ":00"
+            # Convert Unix timestamp to IST (UTC+5:30) for correct hour bucketing
+            from datetime import datetime, timezone, timedelta
+            _IST = timezone(timedelta(hours=5, minutes=30))
+            dt_ist = datetime.fromtimestamp(p.timestamp_seconds, tz=_IST)
+            hour_key = dt_ist.strftime("%H:00")
             by_hour[hour_key] += 1
             bucket = min(int(p.confidence * 5), 4)
             confidence_buckets[bucket] += 1
