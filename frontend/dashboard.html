@@ -399,6 +399,15 @@
     .metric-bar { height: 100%; border-radius: 99px; }
 
     /* responsive */
+    /* Leaflet zone tooltip */
+    .leaflet-zone-tooltip {
+      background: #fff;
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      padding: 0;
+    }
+    .leaflet-zone-tooltip::before { display: none; }
     @media (max-width: 1100px) {
       .stats-grid { grid-template-columns: repeat(2,1fr); }
       .two-col, .three-col { grid-template-columns: 1fr; }
@@ -691,9 +700,10 @@
           <div class="metric-lbl">F1-Score</div>
           <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-cyan)"></div></div>
         </div>
-        <div class="metric-box">
+        <div class="metric-box" style="position:relative" title="3 violation types tested: Wrong-Side Driving, Illegal Parking, Footpath Riding — all detected correctly">
           <div class="metric-val" style="color:var(--accent-amber)">3/3</div>
           <div class="metric-lbl">Scenario Coverage</div>
+          <div style="font-size:0.65rem;color:var(--text-3);margin-top:3px;margin-bottom:4px">Wrong-Side · Parking · Footpath</div>
           <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-amber)"></div></div>
         </div>
       </div>
@@ -1172,9 +1182,15 @@ function renderFeed(violations) {
     const vt = vtype_labels[v.violation_type] || { icon:'⚠️', label:v.violation_type, color:'var(--text-2)' };
     const statusColor = v.review_status==='approved'?'var(--accent-green)':v.review_status==='rejected'?'var(--accent-red)':'var(--accent-amber)';
     const snapFile = v.snapshot_filenames?.[0];
+    const confPct = Math.round(v.confidence * 100);
     const imgContent = snapFile
       ? `<img src="${API.replace('/api','')}/snapshots/${snapFile}" alt="violation snapshot" loading="lazy" style="object-fit:cover;width:100%;height:100%" />`
-      : `<div class="feed-img-placeholder"><span style="font-size:3rem">${vt.icon}</span><span>${vt.label}</span></div>`;
+      : `<div class="feed-img-placeholder" style="flex-direction:column;gap:0;padding:0;background:linear-gradient(135deg,#0a1428 0%,#0d1a2e 100%);width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center">
+          <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center, ${vt.color.replace('var(--accent-red)','rgba(239,68,68,0.12)').replace('var(--accent-amber)','rgba(245,158,11,0.12)').replace('var(--accent-violet)','rgba(139,92,246,0.12)').replace('var(--accent-cyan)','rgba(6,182,212,0.12)')} 0%, transparent 70%)"></div>
+          <div style="font-size:3.2rem;filter:drop-shadow(0 0 12px currentColor);z-index:1">${vt.icon}</div>
+          <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);margin-top:6px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;z-index:1">${vt.label}</div>
+          <div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.6)">AI Evidence Frame</div>
+        </div>`;
     return `<div class="feed-card">
       <div class="feed-img">
         ${imgContent}
@@ -1239,13 +1255,13 @@ function initLeafletMap(byZone) {
       opacity: 0.9,
       fillOpacity: count > 0 ? 0.75 : 0.3,
     }).addTo(_leafletMap);
-    circle.bindPopup(`
-      <div style="font-family:Inter,sans-serif;padding:4px">
-        <strong style="color:#111">${z.name}</strong><br>
-        <span style="color:${z.color};font-weight:700;font-size:1.2em">${count}</span> violations detected<br>
-        <span style="color:#666;font-size:0.85em">Status: ${count > 3 ? '⚠ High Activity' : '✓ Normal'}</span>
+    circle.bindTooltip(`
+      <div style="font-family:Inter,sans-serif;padding:6px 8px;min-width:160px">
+        <div style="font-weight:700;font-size:0.9em;color:#111;margin-bottom:4px">${z.name}</div>
+        <div style="color:${z.color};font-weight:800;font-size:1.3em;line-height:1">${count} <span style="font-size:0.65em;color:#444;font-weight:500">violations detected</span></div>
+        <div style="margin-top:6px;font-size:0.78em;color:${count > 3 ? '#dc2626' : '#16a34a'};font-weight:600">${count > 3 ? '⚠ High Activity' : '✓ Normal'}</div>
       </div>
-    `);
+    `, { sticky: true, opacity: 1, className: 'leaflet-zone-tooltip' });
     _leafletMarkers.push(circle);
     if (count > 0) {
       const label = L.marker([z.lat, z.lng], {
