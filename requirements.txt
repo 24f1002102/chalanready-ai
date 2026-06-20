@@ -6,3 +6,7 @@ numpy>=1.26.0
 pydantic>=2.7.0
 ultralytics>=8.2.0
 aiofiles>=23.2.1
+
+# NOTE: ultralytics installs opencv-python (GUI) as a transitive dep.
+# The nixpacks.toml install phase explicitly removes it and reinstalls headless.
+# Do NOT change this file's opencv entry — it must stay as headless.

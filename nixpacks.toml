@@ -1,8 +1,9 @@
 [phases.install]
 cmds = [
-  "pip install -r requirements.txt",
-  "pip uninstall -y opencv-python || true",
-  "pip install 'opencv-python-headless>=4.9.0'"
+  "python3 -m pip install --upgrade pip",
+  "python3 -m pip install -r requirements.txt",
+  "python3 -m pip uninstall -y opencv-python || true",
+  "python3 -m pip install 'opencv-python-headless>=4.9.0'"
 ]
 
 [start]
