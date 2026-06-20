@@ -215,13 +215,12 @@ def process_video(
                 # ── Wrong-side driving ─────────────────────────────────────
                 if "wrong_side" not in flagged and wrong_side.is_wrong_side(track.centers):
                     flagged.add("wrong_side")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "wrong_side", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         frame, track, "Wrong-Side Driving", snapshots_dir, frames_processed
                     )
                     if store:
-                        snap_path = str(snapshots_dir / f"ws_{tid}_{frames_processed}.jpg")
                         packet = build_candidate_packet(
                             violation_type=ViolationType.wrong_side,
                             confidence=0.81,
@@ -236,13 +235,12 @@ def process_video(
                 # ── Illegal parking ────────────────────────────────────────
                 if "parking" not in flagged and parking.observe(tid, track.centers):
                     flagged.add("parking")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "parking", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         frame, track, "Illegal Parking", snapshots_dir, frames_processed
                     )
                     if store:
-                        snap_path = str(snapshots_dir / f"pk_{tid}_{frames_processed}.jpg")
                         packet = build_candidate_packet(
                             violation_type=ViolationType.illegal_parking,
                             confidence=0.88,
@@ -257,13 +255,12 @@ def process_video(
                 # ── Footpath riding ────────────────────────────────────────
                 if "footpath" not in flagged and footpath.observe(tid, track.class_name, track.center):
                     flagged.add("footpath")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "footpath", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         frame, track, "Footpath Riding", snapshots_dir, frames_processed
                     )
                     if store:
-                        snap_path = str(snapshots_dir / f"fp_{tid}_{frames_processed}.jpg")
                         packet = build_candidate_packet(
                             violation_type=ViolationType.footpath_riding,
                             confidence=0.85,
@@ -281,11 +278,21 @@ def process_video(
                     tid, track.centers, frames_processed, is_red
                 ):
                     flagged.add("stopline")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "stopline", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         frame, track, "Stop-Line Violation", snapshots_dir, frames_processed
                     )
+                    if store:
+                        packet = build_candidate_packet(
+                            violation_type=ViolationType.stopline,
+                            confidence=0.84,
+                            timestamp_seconds=frames_processed / fps,
+                            zone_name=zone_name,
+                            evidence_paths=[snap_path],
+                            plate_text=plate,
+                        )
+                        store.add(packet)
                     violations_detected += 1
 
                 # ── Helmet non-compliance ──────────────────────────
@@ -293,11 +300,21 @@ def process_video(
                     tid, track.class_name, track.age, track.bbox, preprocessed
                 ):
                     flagged.add("helmet")
-                    plate = plate_reader.read_for_track(tid).text
+                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
                     violation_flags.append((tid, "helmet", plate))
-                    _save_violation_snapshot(
+                    snap_path = _save_violation_snapshot(
                         preprocessed, track, "Helmet Non-Compliance", snapshots_dir, frames_processed
                     )
+                    if store:
+                        packet = build_candidate_packet(
+                            violation_type=ViolationType.helmet,
+                            confidence=0.76,
+                            timestamp_seconds=frames_processed / fps,
+                            zone_name=zone_name,
+                            evidence_paths=[snap_path],
+                            plate_text=plate,
+                        )
+                        store.add(packet)
                     violations_detected += 1
 
                 # ── Seatbelt non-compliance (stub — production: YOLOv8-pose) ─
@@ -362,7 +379,7 @@ def _save_violation_snapshot(frame, track, label: str, out_dir: Path, frame_idx:
     # Red banner
     banner_h = 44
     cv2.rectangle(annotated, (0, 0), (annotated.shape[1], banner_h), (10, 10, 180), -1)
-    cv2.putText(annotated, f"⚠ VIOLATION: {label.upper()} | Track #{track.track_id}",
+    cv2.putText(annotated, f"VIOLATION: {label.upper()} | Track #{track.track_id}",
                 (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
     filename = f"{label.replace(' ', '_').lower()}_{track.track_id}_{frame_idx:04d}.jpg"
     path = out_dir / filename

@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import base64
 import os
+import time
+import uuid as _uuid
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import cv2
+import numpy as np
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
+from ..evidence.packet_builder import build_candidate_packet
 from ..models.schemas import ReviewAction, ReviewStatus, ViolationType
-from ..pipeline import process_video
+from ..pipeline import process_video, preprocess_frame, _make_violation_rules
 from ..violations_store import store
 
 
@@ -79,11 +84,158 @@ async def process_uploaded_video(
     }
 
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Single-image analysis  (PS3 "Photo Identification" core requirement)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/images/analyze")
+async def analyze_image(
+    file: UploadFile = File(...),
+    zone_name: str = "Zone-A / MG Road",
+    detector: str = "auto",
+) -> dict[str, Any]:
+    """
+    Analyze a single traffic photo for violations.
+
+    Supported static violations (single-frame detectable):
+      - Helmet non-compliance  (HSV skin-tone heuristic on motorcycle bbox)
+      - Illegal parking         (vehicle center inside no-park polygon)
+      - Footpath riding         (vehicle center inside footpath polygon)
+      - Stop-line violation     (vehicle bbox crosses stop-line Y)
+      - Red-light violation     (bright red signal region detected above stop-line)
+
+    Wrong-side driving and parking dwell-time require temporal context
+    (multiple frames) and cannot be detected from a single photo.
+
+    Returns:
+      - annotated_image: base64-encoded JPEG with overlay annotations
+      - violations: list of detected violation types + confidence
+      - preprocessing: CLAHE enhancement details
+    """
+    suffix = Path(file.filename or "photo.jpg").suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Upload an image file (.jpg / .jpeg / .png / .bmp / .webp).",
+        )
+
+    raw_bytes = await file.read()
+    img_array = np.frombuffer(raw_bytes, dtype=np.uint8)
+    frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Could not decode image. Ensure it is a valid photo.")
+
+    h, w = frame.shape[:2]
+
+    # Stage 1 — CLAHE preprocessing
+    preprocessed = preprocess_frame(frame)
+
+    # Stage 2 — Vehicle detection (single frame, color detector is fine for photos)
+    from ..detection.detector import create_detector
+    det = create_detector(detector if detector != "auto" else "color")
+    detections = det.detect(preprocessed)
+
+    # Stage 3 — Static violation checks
+    _, parking_rule, footpath_rule, stopline_rule, helmet_rule, _, _ = _make_violation_rules(w, h)
+
+    from ..detection.violations.redlight import is_red_signal
+
+    violations_found = []
+    annotated = preprocessed.copy()
+
+    # Check signal state for red-light
+    red_signal_active = is_red_signal(preprocessed)
+
+    for det_obj in detections:
+        x1, y1, x2, y2 = det_obj.x1, det_obj.y1, det_obj.x2, det_obj.y2
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        bbox = (x1, y1, x2, y2)
+        class_name = det_obj.class_name
+
+        # Draw vehicle box
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 200, 255), 2)
+        cv2.putText(annotated, class_name, (x1, max(y1 - 5, 12)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 255), 1, cv2.LINE_AA)
+
+        detected_vtypes = []
+
+        # Helmet check
+        if helmet_rule.observe(
+            track_id=1, class_name=class_name, track_age=15,
+            bbox=bbox, frame=preprocessed
+        ):
+            detected_vtypes.append((ViolationType.helmet, 0.72))
+
+        # Footpath check
+        if footpath_rule.observe(track_id=1, center=(cx, cy)):
+            detected_vtypes.append((ViolationType.footpath_riding, 0.81))
+
+        # Parking zone check
+        if parking_rule.observe(track_id=1, center=(cx, cy)):
+            detected_vtypes.append((ViolationType.illegal_parking, 0.85))
+
+        # Stop-line check (vehicle bbox bottom crosses stop-line)
+        stop_y = int(h * 0.49)  # default stop-line position
+        if y2 >= stop_y:
+            detected_vtypes.append((ViolationType.stopline, 0.78))
+            # Red-light: stop-line crossed AND signal is red
+            if red_signal_active:
+                detected_vtypes.append((ViolationType.red_light, 0.82))
+
+        for vtype, conf in detected_vtypes:
+            # Draw violation overlay
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 220), 3)
+            label = f"[!] {vtype.value.replace('_', ' ').upper()} {conf:.0%}"
+            cv2.putText(annotated, label, (x1, y2 + 16),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1, cv2.LINE_AA)
+
+            # Auto-save to violation store
+            from ..ocr.plate_reader import PlateReader
+            plate = PlateReader().read_for_track(abs(hash(str(bbox))) % 100)
+            packet = build_candidate_packet(
+                violation_type=vtype,
+                confidence=conf,
+                timestamp_seconds=time.time(),
+                zone_name=zone_name,
+                evidence_paths=[],
+                plate_text=plate.text,
+            )
+            store.add(packet)
+            violations_found.append({
+                "violation_type": vtype.value,
+                "confidence": conf,
+                "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                "class_name": class_name,
+                "packet_id": packet.packet_id,
+                "plate": plate.text,
+                "plate_source": plate.source,
+            })
+
+    # Encode annotated image to base64
+    success, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to encode annotated image.")
+    b64 = base64.b64encode(buf.tobytes()).decode()
+
+    return {
+        "message": f"Image analyzed. {len(violations_found)} violation(s) detected. Officer review required.",
+        "officer_review_required": True,
+        "image_size": {"width": w, "height": h},
+        "preprocessing": "CLAHE + Gaussian denoise applied",
+        "red_signal_detected": red_signal_active,
+        "vehicles_detected": len(detections),
+        "violations": violations_found,
+        "annotated_image": f"data:image/jpeg;base64,{b64}",
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  Violations — CRUD
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/violations")
+
 def list_violations(
     status: str | None = Query(None, description="pending | approved | rejected | flagged_for_re_review"),
     violation_type: str | None = Query(None),

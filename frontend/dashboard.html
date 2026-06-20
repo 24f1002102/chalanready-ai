@@ -672,29 +672,29 @@
     <section class="page" id="page-metrics">
       <div style="margin-bottom:20px">
         <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">AI Model Performance Metrics</h1>
-        <p style="color:var(--text-2);font-size:0.83rem">Evaluation on Bengaluru Traffic Police ASTraM validation dataset</p>
+        <p style="color:var(--text-2);font-size:0.83rem">Reproducible offline evaluation on the synthetic CCTV dataset</p>
       </div>
 
       <div class="metrics-grid">
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-green)">87.3%</div>
+          <div class="metric-val" style="color:var(--accent-green)">100%</div>
           <div class="metric-lbl">Precision</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:87.3%;background:var(--accent-green)"></div></div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-green)"></div></div>
         </div>
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-blue)">83.1%</div>
+          <div class="metric-val" style="color:var(--accent-blue)">100%</div>
           <div class="metric-lbl">Recall</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:83.1%;background:var(--accent-blue)"></div></div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-blue)"></div></div>
         </div>
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-cyan)">85.1%</div>
+          <div class="metric-val" style="color:var(--accent-cyan)">100%</div>
           <div class="metric-lbl">F1-Score</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:85.1%;background:var(--accent-cyan)"></div></div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-cyan)"></div></div>
         </div>
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-amber)">79.4%</div>
-          <div class="metric-lbl">mAP@0.5</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:79.4%;background:var(--accent-amber)"></div></div>
+          <div class="metric-val" style="color:var(--accent-amber)">3/3</div>
+          <div class="metric-lbl">Scenario Coverage</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-amber)"></div></div>
         </div>
       </div>
 
@@ -704,11 +704,11 @@
           <table class="violation-table" style="margin-top:-8px">
             <thead><tr><th>Violation Type</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead>
             <tbody id="metrics-tbody">
-              <tr><td><span class="vtype-tag vtype-wrong_side_driving">Wrong-Side Driving</span></td><td>91.2%</td><td>87.5%</td><td>89.3%</td></tr>
-              <tr><td><span class="vtype-tag vtype-illegal_or_footpath_parking">Illegal Parking</span></td><td>94.1%</td><td>91.3%</td><td>92.7%</td></tr>
-              <tr><td><span class="vtype-tag vtype-footpath_riding">Footpath Riding</span></td><td>85.6%</td><td>79.4%</td><td>82.4%</td></tr>
-              <tr><td><span class="vtype-tag vtype-helmet_non_compliance">Helmet Non-Compliance</span></td><td>82.4%</td><td>76.8%</td><td>79.5%</td></tr>
-              <tr><td><span class="vtype-tag vtype-stop_line_violation">Stop-Line Violation</span></td><td>88.9%</td><td>82.1%</td><td>85.4%</td></tr>
+              <tr><td><span class="vtype-tag vtype-wrong_side_driving">Wrong-Side Driving</span></td><td>100%</td><td>100%</td><td>100%</td></tr>
+              <tr><td><span class="vtype-tag vtype-illegal_or_footpath_parking">Illegal Parking</span></td><td>100%</td><td>100%</td><td>100%</td></tr>
+              <tr><td><span class="vtype-tag vtype-footpath_riding">Footpath Riding</span></td><td>100%</td><td>100%</td><td>100%</td></tr>
+              <tr><td><span class="vtype-tag vtype-helmet_non_compliance">Helmet Non-Compliance</span></td><td>N/T</td><td>N/T</td><td>N/T</td></tr>
+              <tr><td><span class="vtype-tag vtype-stop_line_violation">Stop-Line Violation</span></td><td>N/T</td><td>N/T</td><td>N/T</td></tr>
             </tbody>
           </table>
         </div>
@@ -718,8 +718,8 @@
             <div style="color:var(--accent-cyan)">CCTV Stream / Video File</div>
             <div style="padding-left:16px">↓ <span style="color:var(--text-1)">YOLOv8n Vehicle Detector</span></div>
             <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Centroid Multi-Object Tracker</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Violation Rule Engine (5 types)</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">License Plate OCR (EasyOCR)</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Violation Rule Engine (3 live + 2 optional)</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">License Plate OCR (EasyOCR/fallback)</span></div>
             <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Evidence Packet Builder</span></div>
             <div style="padding-left:16px">↓ <span style="color:var(--accent-amber)">Officer Review Queue ← Human Gate</span></div>
             <div style="padding-left:16px">↓ <span style="color:var(--accent-green)">Approved Challan (BTP System)</span></div>
@@ -785,8 +785,8 @@
               <div style="display:flex;align-items:center;gap:10px">
                 <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Detector</label>
                 <select class="filter-select" id="detector-select" style="flex:1">
+                  <option value="color" selected>Color (Synthetic demo)</option>
                   <option value="auto">Auto (YOLOv8 → Color fallback)</option>
-                  <option value="color">Color (Synthetic demo)</option>
                   <option value="yolo">YOLOv8 (Requires weights)</option>
                 </select>
               </div>
@@ -826,7 +826,9 @@
 
 <!-- ─────────────────────────── JAVASCRIPT ─────────────────────────────── -->
 <script>
-const API = 'http://127.0.0.1:8000/api';
+const API = window.location.origin && window.location.origin !== 'null'
+  ? `${window.location.origin}/api`
+  : 'http://127.0.0.1:8000/api';
 let allViolations = [];
 let charts = {};
 
