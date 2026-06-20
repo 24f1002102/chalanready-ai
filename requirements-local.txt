@@ -1,0 +1,4 @@
+# Local development requirements (includes YOLOv8 for real AI detection)
+# Run: pip install -r requirements-local.txt
+-r requirements.txt
+ultralytics>=8.2.0

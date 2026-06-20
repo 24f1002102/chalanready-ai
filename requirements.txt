@@ -1,12 +1,11 @@
+# Cloud deployment requirements (no ultralytics = no opencv-GUI conflict)
+# The app auto-falls back to the color detector in cloud/demo mode.
+# For local use with YOLOv8: pip install -r requirements-local.txt
+
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 opencv-python-headless>=4.9.0
 numpy>=1.26.0
 pydantic>=2.7.0
-ultralytics>=8.2.0
 aiofiles>=23.2.1
-
-# NOTE: ultralytics installs opencv-python (GUI) as a transitive dep.
-# The nixpacks.toml install phase explicitly removes it and reinstalls headless.
-# Do NOT change this file's opencv entry — it must stay as headless.
