@@ -27,6 +27,11 @@ ChalanReady AI automatically detects traffic violations from CCTV footage and pr
 > **Evaluation**: Run `python sample_data/evaluate.py` for reproducible Precision / Recall / F1 on the synthetic dataset.
 
 ---
+## 🚀 Deployed using Railway.com
+
+**Open Link** - https://web-production-477cc.up.railway.app/ui/dashboard.html
+
+Click **LOAD DATA** and Ponder upon its working
 
 ## 🚀 Quick Start (One Command)
 
