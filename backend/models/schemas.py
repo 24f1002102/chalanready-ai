@@ -53,6 +53,7 @@ class ViolationPacket(BaseModel):
     gps_lat: float = 12.9716   # Bengaluru default — will be per-camera in production
     gps_lng: float = 77.5946
     plate_text: str | None = None
+    plate_source: str | None = None
     review_status: ReviewStatus = ReviewStatus.pending
     evidence: list[EvidenceAsset] = Field(default_factory=list)
     officer_notes: str | None = None

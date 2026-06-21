@@ -12,9 +12,15 @@ def build_candidate_packet(
     zone_name: str,
     evidence_paths: list[str],
     plate_text: str | None = None,
+    plate_source: str | None = None,
+    gps_lat: float = 12.9716,   # Bengaluru city centre default
+    gps_lng: float = 77.5946,
 ) -> ViolationPacket:
     evidence = [
-        EvidenceAsset(kind="annotated_frame" if path.lower().endswith((".jpg", ".png")) else "clip", path=path)
+        EvidenceAsset(
+            kind="annotated_frame" if path.lower().endswith((".jpg", ".jpeg", ".png")) else "clip",
+            path=path,
+        )
         for path in evidence_paths
     ]
     return ViolationPacket(
@@ -24,6 +30,9 @@ def build_candidate_packet(
         timestamp_seconds=timestamp_seconds,
         zone_name=zone_name,
         plate_text=plate_text,
+        plate_source=plate_source,
         review_status=ReviewStatus.pending,
         evidence=evidence,
+        gps_lat=gps_lat,
+        gps_lng=gps_lng,
     )

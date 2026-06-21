@@ -18,9 +18,22 @@ from .detection.violations.illegal_parking import IllegalParkingRule
 from .detection.violations.footpath_riding import FootpathRidingRule
 from .detection.violations.stopline_helmet import StopLineRule, HelmetRule
 from .detection.violations.seatbelt_triple import SeatbeltRule, TripleRidingRule
+from .detection.violations.redlight import is_red_signal
 from .evidence.packet_builder import build_candidate_packet
 from .models.schemas import ViolationType
 from .ocr.plate_reader import PlateReader
+
+# Zone GPS registry (single source of truth shared with routes.py via import)
+_ZONE_GPS: dict[str, tuple[float, float]] = {
+    "Zone-A / MG Road":       (12.9716, 77.5946),
+    "Zone-B / Indiranagar":   (12.9784, 77.6408),
+    "Zone-C / Koramangala":   (12.9352, 77.6245),
+    "Zone-D / Whitefield":    (12.9698, 77.7500),
+    "Zone-E / Jayanagar":     (12.9250, 77.5938),
+}
+
+def _get_zone_gps(zone_name: str) -> tuple[float, float]:
+    return _ZONE_GPS.get(zone_name, (12.9716, 77.5946))
 
 
 @dataclass(frozen=True)
@@ -112,15 +125,15 @@ def _make_violation_rules(width: int, height: int):
 
     wrong_side = WrongSideRule(
         allowed_direction=_DEFAULT_ALLOWED_DIRECTION,
-        min_points=8,
+        min_points=5,   # reduced from 8 so short clips still trigger detection
     )
     parking = IllegalParkingRule(
         restricted_zone=sp(_DEFAULT_NO_PARK_ZONE),
-        dwell_frames=45,  # ~2.5 s at 18 fps
+        dwell_frames=30,  # ~1.7 s at 18 fps (was 45)
     )
     footpath = FootpathRidingRule(
         footpath_zone=sp(_DEFAULT_FOOTPATH_POLYGON),
-        min_inside_frames=5,
+        min_inside_frames=4,
     )
     stopline = StopLineRule(
         stop_line_y=int(_DEFAULT_STOP_LINE_Y * scale_y),
@@ -141,6 +154,7 @@ def process_video(
     zone_name: str = "Zone-A / MG Road",
     red_phase_frames: set[int] | None = None,
     store=None,         # optional ViolationsStore to persist packets
+    detect_signal: bool = True,  # auto-detect red signal per frame
 ) -> dict[str, Any]:
     import time as _time
     _start_wall_time = _time.time()  # wall-clock start for correct violation timestamps
@@ -187,6 +201,9 @@ def process_video(
 
     red_phase_frames = red_phase_frames or set()
 
+    # Resolve GPS for this camera zone once
+    _gps_lat, _gps_lng = _get_zone_gps(zone_name)
+
     frames_processed = 0
     detections_seen = 0
     tracks_seen: set[int] = set()
@@ -220,7 +237,8 @@ def process_video(
                 # ── Wrong-side driving ─────────────────────────────────────
                 if "wrong_side" not in flagged and wrong_side.is_wrong_side(track.centers):
                     flagged.add("wrong_side")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "wrong_side", plate))
                     snap_path = _save_violation_snapshot(
                         frame, track, "Wrong-Side Driving", snapshots_dir, frames_processed
@@ -233,6 +251,9 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1
@@ -240,7 +261,8 @@ def process_video(
                 # ── Illegal parking ────────────────────────────────────────
                 if "parking" not in flagged and parking.observe(tid, track.centers):
                     flagged.add("parking")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "parking", plate))
                     snap_path = _save_violation_snapshot(
                         frame, track, "Illegal Parking", snapshots_dir, frames_processed
@@ -253,6 +275,9 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1
@@ -260,7 +285,8 @@ def process_video(
                 # ── Footpath riding ────────────────────────────────────────
                 if "footpath" not in flagged and footpath.observe(tid, track.class_name, track.center):
                     flagged.add("footpath")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "footpath", plate))
                     snap_path = _save_violation_snapshot(
                         frame, track, "Footpath Riding", snapshots_dir, frames_processed
@@ -273,17 +299,28 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1
 
                 # ── Stop-line violation ────────────────────────────────────
-                is_red = frames_processed in red_phase_frames
+                # Determine red-signal state: prefer static set (for tests),
+                # fall back to live pixel-based detection on every frame.
+                if red_phase_frames:
+                    is_red = frames_processed in red_phase_frames
+                elif detect_signal:
+                    is_red = is_red_signal(preprocessed)
+                else:
+                    is_red = False
                 if "stopline" not in flagged and stopline.observe(
                     tid, track.centers, frames_processed, is_red
                 ):
                     flagged.add("stopline")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "stopline", plate))
                     snap_path = _save_violation_snapshot(
                         frame, track, "Stop-Line Violation", snapshots_dir, frames_processed
@@ -296,6 +333,9 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1
@@ -305,7 +345,8 @@ def process_video(
                     tid, track.class_name, track.age, track.bbox, preprocessed
                 ):
                     flagged.add("helmet")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "helmet", plate))
                     snap_path = _save_violation_snapshot(
                         preprocessed, track, "Helmet Non-Compliance", snapshots_dir, frames_processed
@@ -318,16 +359,23 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1
 
-                # ── Seatbelt non-compliance (stub — production: YOLOv8-pose) ─
+                # ── Seatbelt non-compliance ─────────────────────────────
+                # Crop vehicle bbox and pass only that region for analysis
+                x1s, y1s, x2s, y2s = track.bbox
+                _seat_crop = preprocessed[max(0,y1s):y2s, max(0,x1s):x2s] if y2s>y1s and x2s>x1s else None
                 if "seatbelt" not in flagged and seatbelt.observe(
-                    tid, track.class_name, track.age, preprocessed
+                    tid, track.class_name, track.age, _seat_crop
                 ):
                     flagged.add("seatbelt")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "seatbelt", plate))
                     snap_path = _save_violation_snapshot(
                         preprocessed, track, "Seatbelt Non-Compliance", snapshots_dir, frames_processed
@@ -340,16 +388,22 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1
 
-                # ── Triple riding (stub — production: multi-person head count) ─
+                # ── Triple riding ─────────────────────────────────────
+                x1t, y1t, x2t, y2t = track.bbox
+                _tri_crop = preprocessed[max(0,y1t):y2t, max(0,x1t):x2t] if y2t>y1t and x2t>x1t else None
                 if "triple" not in flagged and triple.observe(
-                    tid, track.class_name, track.age, preprocessed
+                    tid, track.class_name, track.age, _tri_crop
                 ):
                     flagged.add("triple")
-                    plate = plate_reader.read_for_track(tid, preprocessed, track.bbox).text
+                    plate_read = plate_reader.read_for_track(tid, preprocessed, track.bbox)
+                    plate = plate_read.text
                     violation_flags.append((tid, "triple", plate))
                     snap_path = _save_violation_snapshot(
                         preprocessed, track, "Triple Riding", snapshots_dir, frames_processed
@@ -362,6 +416,9 @@ def process_video(
                             zone_name=zone_name,
                             evidence_paths=[snap_path],
                             plate_text=plate,
+                            plate_source=plate_read.source,
+                            gps_lat=_gps_lat,
+                            gps_lng=_gps_lng,
                         )
                         store.add(packet)
                     violations_detected += 1

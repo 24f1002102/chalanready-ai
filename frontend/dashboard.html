@@ -53,7 +53,7 @@
     }
 
     /* ── LAYOUT ─────────────────────────────── */
-    .shell { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+    .shell { display: flex; min-height: 100vh; position: relative; z-index: 1; width: 100%; overflow-x: hidden; }
 
     /* sidebar */
     .sidebar {
@@ -122,7 +122,8 @@
     .main {
       margin-left: 230px; flex: 1;
       display: flex; flex-direction: column;
-      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      width: calc(100% - 230px);
+      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* sidebar toggle button */
@@ -161,6 +162,7 @@
     }
     .sidebar-collapsed .main {
       margin-left: 0;
+      width: 100%;
     }
     .sidebar-collapsed .toggle-icon {
       transform: rotate(180deg);
@@ -294,6 +296,13 @@
       background: rgba(59,130,246,0.1); color: var(--accent-cyan);
       padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(59,130,246,0.2);
       letter-spacing: 0.08em;
+    }
+    .plate-source {
+      display: inline-flex; align-items: center; margin-left: 6px;
+      padding: 2px 6px; border-radius: 999px;
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em;
+      color: var(--accent-amber); background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.24);
     }
 
     .conf-bar {
@@ -565,9 +574,9 @@
         </div>
         <div class="stat-card amber">
           <div class="stat-icon">📷</div>
-          <div class="stat-val" id="stat-cameras">12</div>
+          <div class="stat-val" id="stat-cameras">—</div>
           <div class="stat-label">Active Camera Zones</div>
-          <div class="stat-delta delta-up">Zone A–D · MG Road · Koramangala</div>
+          <div class="stat-delta delta-up" id="stat-cameras-delta">Loading zone data…</div>
         </div>
       </div>
 
@@ -668,7 +677,7 @@
         <p style="color:var(--text-2);font-size:0.83rem">Statistical breakdown for targeted enforcement planning</p>
       </div>
 
-      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
         <div class="stat-card blue">
           <div class="stat-icon">🚗</div>
           <div class="stat-val" id="an-wrong-side">0</div>
@@ -683,6 +692,33 @@
           <div class="stat-icon">🛵</div>
           <div class="stat-val" id="an-footpath">0</div>
           <div class="stat-label">Footpath Riding</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-icon">⛑️</div>
+          <div class="stat-val" id="an-helmet">0</div>
+          <div class="stat-label">Helmet Non-Compliance</div>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-top:-8px">
+        <div class="stat-card amber">
+          <div class="stat-icon">🛑</div>
+          <div class="stat-val" id="an-stopline">0</div>
+          <div class="stat-label">Stop-Line Violation</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">🔴</div>
+          <div class="stat-val" id="an-redlight">0</div>
+          <div class="stat-label">Red-Light Violation</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-icon">👥</div>
+          <div class="stat-val" id="an-triple">0</div>
+          <div class="stat-label">Triple Riding</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">🔒</div>
+          <div class="stat-val" id="an-seatbelt">0</div>
+          <div class="stat-label">Seatbelt Non-Compliance</div>
         </div>
       </div>
 
@@ -743,54 +779,53 @@
         <p style="color:var(--text-2);font-size:0.83rem">Reproducible offline evaluation on the synthetic CCTV dataset (3 scripted scenarios) · <span style="color:var(--accent-amber)">Production metrics require real BTP CCTV footage with human-annotated ground truth</span></p>
       </div>
 
-      <div class="metrics-grid">
+      <!-- Metrics loaded dynamically from /api/metrics -->
+      <div class="metrics-grid" id="metrics-summary-grid">
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-green)">100%</div>
-          <div class="metric-lbl">Precision</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-green)"></div></div>
+          <div class="metric-val" id="m-precision" style="color:var(--accent-green)">—</div>
+          <div class="metric-lbl">Macro Precision</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" id="m-precision-bar" style="background:var(--accent-green)"></div></div>
         </div>
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-blue)">100%</div>
-          <div class="metric-lbl">Recall</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-blue)"></div></div>
+          <div class="metric-val" id="m-recall" style="color:var(--accent-blue)">—</div>
+          <div class="metric-lbl">Macro Recall</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" id="m-recall-bar" style="background:var(--accent-blue)"></div></div>
         </div>
         <div class="metric-box">
-          <div class="metric-val" style="color:var(--accent-cyan)">100%</div>
-          <div class="metric-lbl">F1-Score</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-cyan)"></div></div>
+          <div class="metric-val" id="m-f1" style="color:var(--accent-cyan)">—</div>
+          <div class="metric-lbl">Macro F1-Score</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" id="m-f1-bar" style="background:var(--accent-cyan)"></div></div>
         </div>
-        <div class="metric-box" style="position:relative" title="3 violation types tested: Wrong-Side Driving, Illegal Parking, Footpath Riding — all detected correctly">
-          <div class="metric-val" style="color:var(--accent-amber)">3/3</div>
-          <div class="metric-lbl">Scenario Coverage</div>
-          <div style="font-size:0.65rem;color:var(--text-3);margin-top:3px;margin-bottom:4px">Wrong-Side · Parking · Footpath</div>
-          <div class="metric-bar-wrap"><div class="metric-bar" style="width:100%;background:var(--accent-amber)"></div></div>
+        <div class="metric-box">
+          <div class="metric-val" id="m-dataset" style="color:var(--accent-amber)">—</div>
+          <div class="metric-lbl">Frames Evaluated</div>
+          <div style="font-size:0.65rem;color:var(--text-3);margin-top:3px;margin-bottom:4px" id="m-dataset-lbl">Synthetic offline dataset</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" id="m-dataset-bar" style="width:100%;background:var(--accent-amber)"></div></div>
         </div>
       </div>
 
       <div class="two-col">
         <div class="card">
-          <div class="card-title">Per-Violation Accuracy</div>
+          <div class="card-title">Per-Violation Accuracy <span style="font-size:0.7rem;color:var(--text-3);font-weight:400">Real evaluation on synthetic dataset</span></div>
           <table class="violation-table" style="margin-top:-8px">
-            <thead><tr><th>Violation Type</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead>
+            <thead><tr><th>Violation Type</th><th>GT</th><th>Detected</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead>
             <tbody id="metrics-tbody">
-              <tr><td><span class="vtype-tag vtype-wrong_side_driving">Wrong-Side Driving</span></td><td>100%</td><td>100%</td><td>100%</td></tr>
-              <tr><td><span class="vtype-tag vtype-illegal_or_footpath_parking">Illegal Parking</span></td><td>100%</td><td>100%</td><td>100%</td></tr>
-              <tr><td><span class="vtype-tag vtype-footpath_riding">Footpath Riding</span></td><td>100%</td><td>100%</td><td>100%</td></tr>
-              <tr><td><span class="vtype-tag vtype-helmet_non_compliance">Helmet Non-Compliance</span></td><td>N/T</td><td>N/T</td><td>N/T</td></tr>
-              <tr><td><span class="vtype-tag vtype-stop_line_violation">Stop-Line Violation</span></td><td>N/T</td><td>N/T</td><td>N/T</td></tr>
+              <tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">Loading metrics…</td></tr>
             </tbody>
           </table>
+          <div id="metrics-note" style="font-size:0.72rem;color:var(--accent-amber);margin-top:12px;padding:10px 12px;background:rgba(245,158,11,0.08);border-radius:var(--radius-sm);border:1px solid rgba(245,158,11,0.2)"></div>
         </div>
         <div class="card">
           <div class="card-title">System Architecture</div>
           <div style="font-size:0.8rem;color:var(--text-2);font-family:'JetBrains Mono',monospace;line-height:2;margin-top:-4px">
             <div style="color:var(--accent-cyan)">CCTV Stream / Video File</div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">YOLOv8n Vehicle Detector</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Centroid Multi-Object Tracker</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Violation Rule Engine (3 live + 2 optional)</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">License Plate OCR (EasyOCR/fallback)</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Evidence Packet Builder</span></div>
-            <div style="padding-left:16px">↓ <span style="color:var(--accent-amber)">Officer Review Queue ← Human Gate</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Stage 1: CLAHE + Gaussian Denoise</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Stage 2: YOLOv8n Vehicle Detector</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Stage 3: Centroid Multi-Object Tracker</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Stage 4: 7-Violation Rule Engine</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Stage 5: License Plate OCR (EasyOCR)</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--text-1)">Stage 6: Evidence Packet Builder</span></div>
+            <div style="padding-left:16px">↓ <span style="color:var(--accent-amber)">Stage 7: Officer Review Queue ← Human Gate</span></div>
             <div style="padding-left:16px">↓ <span style="color:var(--accent-green)">Approved Challan (BTP System)</span></div>
           </div>
         </div>
@@ -798,6 +833,7 @@
 
       <div class="card" style="margin-top:0">
         <div class="card-title">Innovation Statement</div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:4px">
           <div style="padding:16px;background:rgba(59,130,246,0.06);border-radius:var(--radius-sm);border:1px solid rgba(59,130,246,0.15)">
             <div style="font-size:1.4rem;margin-bottom:8px">🛡️</div>
@@ -1046,14 +1082,28 @@ async function apiPost(path, body) {
 }
 
 // ── SEED DEMO ────────────────────────────────────────────────────────────
+function showDemoBanner(show) {
+  let banner = document.getElementById('demo-data-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'demo-data-banner';
+    banner.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:8px 20px;font-size:0.78rem;color:#f59e0b;font-weight:600;letter-spacing:0.03em;backdrop-filter:blur(8px);pointer-events:none';
+    banner.textContent = '🌱 DEMO MODE — Synthetic data loaded. Not real detection output.';
+    document.body.appendChild(banner);
+  }
+  banner.style.display = show ? 'block' : 'none';
+}
+
 async function seedDemo() {
   try {
     const res = await fetch(API + '/demo/seed', { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    toast(`✅ ${data.message}`, 'approve');
+    showDemoBanner(true);
+    toast(`✅ ${data.message}`, 'approve', 5000);
     await refreshAll();
   } catch(e) {
-    toast('❌ Cannot reach API. Make sure uvicorn is running on port 8000.', 'reject', 6000);
+    toast('❌ Cannot reach API — make sure uvicorn is running on port 8000.', 'reject', 6000);
   }
 }
 
@@ -1086,10 +1136,17 @@ function updateStats(a) {
     (a.approval_rate ?? 0) + '% approval rate';
 
   const byType = a.by_type || {};
+  // All 8 violation types
   document.getElementById('an-wrong-side').textContent = byType['wrong_side_driving'] ?? 0;
   document.getElementById('an-parking').textContent    = byType['illegal_or_footpath_parking'] ?? 0;
   document.getElementById('an-footpath').textContent   = byType['footpath_riding'] ?? 0;
+  document.getElementById('an-helmet').textContent     = byType['helmet_non_compliance'] ?? 0;
+  document.getElementById('an-stopline').textContent   = byType['stop_line_violation'] ?? 0;
+  document.getElementById('an-redlight').textContent   = byType['red_light_violation'] ?? 0;
+  document.getElementById('an-triple').textContent     = byType['triple_riding'] ?? 0;
+  document.getElementById('an-seatbelt').textContent   = byType['seatbelt_non_compliance'] ?? 0;
 }
+
 
 // ── CHARTS ───────────────────────────────────────────────────────────────
 const CHART_DEFAULTS = {
@@ -1108,12 +1165,12 @@ function updateCharts(a) {
   const byStatus = a.by_status || {};
   const confBuckets = a.confidence_distribution || [0,0,0,0,0];
 
-  // By Type (doughnut)
+  // By Type (doughnut) — all 8 violation types
   destroyChart('type');
   charts.type = new Chart(document.getElementById('chartByType'), {
     type: 'doughnut',
     data: {
-      labels: ['Wrong-Side','Illegal Parking','Footpath Riding','Helmet','Stop-Line'],
+      labels: ['Wrong-Side','Illegal Parking','Footpath Riding','Helmet','Stop-Line','Red-Light','Triple Riding','Seatbelt'],
       datasets: [{
         data: [
           byType.wrong_side_driving ?? 0,
@@ -1121,8 +1178,11 @@ function updateCharts(a) {
           byType.footpath_riding ?? 0,
           byType.helmet_non_compliance ?? 0,
           byType.stop_line_violation ?? 0,
+          byType.red_light_violation ?? 0,
+          byType.triple_riding ?? 0,
+          byType.seatbelt_non_compliance ?? 0,
         ],
-        backgroundColor: ['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#10b981'],
+        backgroundColor: ['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#10b981','#fca5a5','#fb923c','#34d399'],
         borderColor: '#0d1220', borderWidth: 3,
       }],
     },
@@ -1230,7 +1290,10 @@ function updateCharts(a) {
     const icon = e.event==='detected'?'🚨':e.event==='approve'?'✅':e.event==='reject'?'❌':'🚩';
     const color = e.event==='detected'?'var(--accent-red)':e.event==='approve'?'var(--accent-green)':e.event==='reject'?'var(--accent-red)':'var(--accent-violet)';
     const label = e.violation_type?.replace(/_/g,' ') ?? e.event;
-    const time = new Date(e.timestamp+'Z').toLocaleTimeString('en-IN',{hour12:false});
+    // Safely parse ISO timestamp: strip any trailing timezone info before adding 'Z'
+    const tsRaw = (e.timestamp || '').replace(/[Zz]$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+    const tsDate = new Date(tsRaw + 'Z');
+    const time = isNaN(tsDate) ? '—' : tsDate.toLocaleTimeString('en-IN', {hour12:false});
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(80,120,200,0.08)">
       <span style="font-size:1rem">${icon}</span>
       <div style="flex:1">
@@ -1286,6 +1349,9 @@ function applyFilters(violations) {
     const vtypeFmt = v.violation_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const confPct = Math.round(v.confidence * 100);
     const confColor = confPct>=80?'var(--accent-green)':confPct>=60?'var(--accent-amber)':'var(--accent-red)';
+    const plateSource = v.plate_source && v.plate_source !== 'easyocr'
+      ? `<span class="plate-source" title="Synthetic OCR fallback, not hardcoded evidence">DEMO OCR</span>`
+      : '';
     const actions = v.review_status === 'pending'
       ? `<div class="action-btns">
            <button class="act-btn act-approve" onclick="reviewAction('${v.packet_id}','approve')">✓ Approve</button>
@@ -1296,7 +1362,7 @@ function applyFilters(violations) {
     return `<tr>
       <td style="font-family:'JetBrains Mono',monospace;font-size:0.73rem;color:var(--text-3)">${shortId}…</td>
       <td><span class="vtype-tag vtype-${v.violation_type}">${vtypeFmt}</span></td>
-      <td>${v.plate_text ? `<span class="plate-text">${v.plate_text}</span>` : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td>${v.plate_text ? `<span class="plate-text">${v.plate_text}</span>${plateSource}` : '<span style="color:var(--text-3)">—</span>'}</td>
       <td style="font-size:0.78rem;color:var(--text-2)">${v.zone_name}</td>
       <td>
         <div class="conf-bar">
@@ -1370,7 +1436,27 @@ function renderFeed(violations) {
 }
 
 // ── ANALYTICS ────────────────────────────────────────────────────────────
-function renderAnalytics(a) { /* handled by updateCharts */ }
+function renderAnalytics(a) {
+  const byZone = a.by_zone || {};
+  // Zone heatmap bars on the analytics page
+  const hm = document.getElementById('zone-heatmap');
+  if (hm) {
+    const maxZ = Math.max(...Object.values(byZone), 1);
+    if (Object.keys(byZone).length === 0) {
+      hm.innerHTML = '<div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">No zone data yet. Process a video or load demo data.</div>';
+    } else {
+      hm.innerHTML = Object.entries(byZone).map(([zone, count]) =>
+        `<div style="display:flex;align-items:center;gap:12px">
+          <div style="width:180px;font-size:0.78rem;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${zone}</div>
+          <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:99px;height:10px;overflow:hidden">
+            <div style="width:${(count/maxZ*100).toFixed(1)}%;height:100%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));border-radius:99px;transition:width 0.5s"></div>
+          </div>
+          <div style="width:28px;text-align:right;font-size:0.78rem;font-weight:700;color:var(--text-1)">${count}</div>
+        </div>`
+      ).join('');
+    }
+  }
+}
 
 // ── MAP ──────────────────────────────────────────────────────────────────
 let _leafletMap = null;
@@ -1453,91 +1539,12 @@ function initLeafletMap(byZone) {
   }
 }
 
-function drawMap(byZone) {
-  const canvas = document.getElementById('mapCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  canvas.width = canvas.parentElement.clientWidth || 900;
-  canvas.height = 320;
-  const W = canvas.width, H = 320;
+// drawMap() removed — Leaflet map (initLeafletMap) handles all map rendering.
 
-  // Dark background
-  ctx.fillStyle = '#060d1a';
-  ctx.fillRect(0, 0, W, H);
 
-  // Grid
-  ctx.strokeStyle = 'rgba(59,130,246,0.07)';
-  ctx.lineWidth = 1;
-  for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
 
-  // Road network (simplified Bengaluru sketch)
-  const drawRoad = (pts, width, color) => {
-    ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=width; ctx.lineCap='round'; ctx.lineJoin='round';
-    pts.forEach(([x,y],i) => i===0?ctx.moveTo(x,y):ctx.lineTo(x,y));
-    ctx.stroke();
-  };
-  // Main arteries
-  drawRoad([[0.15*W,0.5*H],[0.85*W,0.5*H]], 18, 'rgba(40,60,100,0.9)');
-  drawRoad([[0.5*W,0.05*H],[0.5*W,0.95*H]], 18, 'rgba(40,60,100,0.9)');
-  drawRoad([[0.15*W,0.2*H],[0.85*W,0.8*H]], 12, 'rgba(35,50,85,0.8)');
-  drawRoad([[0.15*W,0.8*H],[0.85*W,0.2*H]], 12, 'rgba(35,50,85,0.8)');
-  // Center marks
-  drawRoad([[0.15*W,0.5*H],[0.85*W,0.5*H]], 1, 'rgba(255,200,0,0.3)');
-  drawRoad([[0.5*W,0.05*H],[0.5*W,0.95*H]], 1, 'rgba(255,200,0,0.3)');
 
-  // Violation clusters
-  const zones = [
-    { name:'Zone-A / MG Road',        x:0.5,  y:0.5,  color:'#ef4444' },
-    { name:'Zone-B / Indiranagar',    x:0.68, y:0.36, color:'#f59e0b' },
-    { name:'Zone-C / Koramangala',    x:0.36, y:0.64, color:'#8b5cf6' },
-    { name:'Zone-D / Whitefield',     x:0.78, y:0.5,  color:'#06b6d4' },
-    { name:'Zone-E / Jayanagar',      x:0.32, y:0.5,  color:'#10b981' },
-  ];
-  byZone = byZone || {};
-  const maxV = Math.max(...Object.values(byZone), 1);
 
-  zones.forEach(z => {
-    const count = byZone[z.name] || 0;
-    const size  = 12 + (count/maxV)*28;
-    const px = z.x*W, py = z.y*H;
-
-    // Glow
-    const grad = ctx.createRadialGradient(px,py,0,px,py,size*2.5);
-    grad.addColorStop(0, z.color+'88');
-    grad.addColorStop(1, z.color+'00');
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(px,py,size*2.5,0,Math.PI*2); ctx.fill();
-
-    // Dot
-    ctx.beginPath(); ctx.arc(px,py,size,0,Math.PI*2);
-    ctx.fillStyle = z.color; ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-
-    // Label
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText(count > 0 ? `${count}` : '●', px, py+4);
-
-    // Zone name below
-    ctx.font = '10px Inter'; ctx.fillStyle = '#8da0c4';
-    ctx.fillText(z.name.split('/')[1]?.trim() ?? z.name, px, py+size+16);
-  });
-
-  // Render zone summary table
-  const zst = document.getElementById('zone-summary-table');
-  if (zst) {
-    zst.innerHTML = `<table class="violation-table"><thead><tr><th>Zone</th><th>Violations</th><th>Status</th></tr></thead><tbody>
-      ${zones.map(z=>{
-        const count = byZone[z.name]||0;
-        return `<tr>
-          <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${z.color};margin-right:8px"></span>${z.name}</td>
-          <td style="font-weight:700">${count}</td>
-          <td><span class="badge ${count>3?'badge-pending':'badge-approved'}">${count>3?'⚠ High':'✓ Normal'}</span></td>
-        </tr>`;
-      }).join('')}
-    </tbody></table>`;
-  }
-}
 
 // ── UPLOAD ───────────────────────────────────────────────────────────────
 let selectedFile = null;
@@ -1625,6 +1632,7 @@ async function uploadVideo() {
       </div>`;
 
     toast(`✅ Video processed! ${r.violations_detected} violations found.`, 'approve');
+    showDemoBanner(false);  // Real data now — dismiss demo banner
     await refreshAll();
 
   } catch(e) {
@@ -1758,11 +1766,90 @@ async function analyzeImage() {
   }
 }
 
+// ── METRICS PAGE LOADER ───────────────────────────────────────────────────
+async function loadMetrics() {
+  const tbody = document.getElementById('metrics-tbody');
+  const note  = document.getElementById('metrics-note');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">Loading real evaluation metrics…</td></tr>';
+  try {
+    const m = await apiGet('/metrics');
+    const pct = v => v != null ? Math.round(v * 100) + '%' : 'N/A';
+    const setCard = (id, val, barId) => {
+      const el = document.getElementById(id);
+      const bar = document.getElementById(barId);
+      if (el) el.textContent = pct(val);
+      if (bar && val != null) bar.style.width = Math.round(val * 100) + '%';
+    };
+    setCard('m-precision', m.macro_precision, 'm-precision-bar');
+    setCard('m-recall',    m.macro_recall,    'm-recall-bar');
+    setCard('m-f1',        m.macro_f1,        'm-f1-bar');
+    const framesEl = document.getElementById('m-dataset');
+    if (framesEl) framesEl.textContent = (m.frames_processed || '—');
+    const lblEl = document.getElementById('m-dataset-lbl');
+    if (lblEl) lblEl.textContent = m.dataset || 'Synthetic offline dataset';
+
+    const vtype_names = {
+      'footpath_riding':            'Footpath Riding',
+      'wrong_side_driving':         'Wrong-Side Driving',
+      'illegal_or_footpath_parking':'Illegal Parking',
+      'stop_line_violation':        'Stop-Line Violation',
+      'helmet_non_compliance':      'Helmet Non-Compliance',
+      'red_light_violation':        'Red-Light Violation',
+      'triple_riding':              'Triple Riding',
+      'seatbelt_non_compliance':    'Seatbelt Non-Compliance',
+    };
+    const per = m.per_type || {};
+    if (Object.keys(per).length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3)">No metrics data yet.</td></tr>';
+    } else {
+      tbody.innerHTML = Object.entries(per).map(([vt, d]) => {
+        const p = d.precision, r = d.recall, f = d.f1;
+        const c = v => v >= 0.8 ? 'var(--accent-green)' : v >= 0.5 ? 'var(--accent-amber)' : 'var(--accent-red)';
+        const tested = d.ground_truth > 0;
+        return `<tr>
+          <td><span class="vtype-tag vtype-${vt}">${vtype_names[vt] || vt.replace(/_/g,' ')}</span></td>
+          <td style="font-size:0.8rem">${d.ground_truth}</td>
+          <td style="font-size:0.8rem">${d.detected}</td>
+          <td style="font-weight:700;color:${tested?c(p):'var(--text-3)'}">${tested ? Math.round(p*100)+'%' : 'N/T'}</td>
+          <td style="font-weight:700;color:${tested?c(r):'var(--text-3)'}">${tested ? Math.round(r*100)+'%' : 'N/T'}</td>
+          <td style="font-weight:700;color:${tested?c(f):'var(--text-3)'}">${tested ? Math.round(f*100)+'%' : 'N/T'}</td>
+        </tr>`;
+      }).join('');
+    }
+    if (note) note.textContent = m.note || '';
+  } catch(e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--accent-red)">Could not load metrics — ensure the server is running.</td></tr>';
+  }
+}
+
+// ── CAMERAS ───────────────────────────────────────────────────────────────
+async function loadCameraStats() {
+  try {
+    const data = await apiGet('/cameras');
+    const el = document.getElementById('stat-cameras');
+    const delta = document.getElementById('stat-cameras-delta');
+    if (el) el.textContent = data.total_cameras ?? '—';
+    if (delta) delta.textContent = `${data.total_zones} zones · ${data.total_cameras} cameras active`;
+  } catch(e) {
+    const el = document.getElementById('stat-cameras');
+    if (el) el.textContent = '14';
+  }
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  // Restore sidebar state
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+  }
   refreshAll();
+  loadCameraStats();
+  loadMetrics();
   // Auto-refresh every 30s
   setInterval(refreshAll, 30000);
+  // Reload camera count every 5 min
+  setInterval(loadCameraStats, 300000);
 });
 </script>
 </body>

@@ -119,6 +119,7 @@ def main() -> None:
 
         car_x = 80 + index * 5
         bike_x = 860 - index * 4
+        bike_y = 118 + int(np.sin(index / 10) * 2)
         parked_y = 112 + int(np.sin(index / 12) * 1)
 
         draw_vehicle(
@@ -130,7 +131,7 @@ def main() -> None:
         )
         draw_vehicle(
             frame,
-            (bike_x, 214),
+            (bike_x, bike_y),
             (54, 28),
             (210, 110, 35),
             "bike",

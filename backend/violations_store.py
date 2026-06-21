@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS violations (
     timestamp_secs  REAL NOT NULL,
     zone_name       TEXT NOT NULL,
     plate_text      TEXT,
+    plate_source    TEXT,
     review_status   TEXT NOT NULL DEFAULT 'pending',
     gps_lat         REAL DEFAULT 12.9716,
     gps_lng         REAL DEFAULT 77.5946,
@@ -67,6 +68,13 @@ class ViolationsStore:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            self._ensure_column(conn, "violations", "plate_source", "TEXT")
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -81,9 +89,9 @@ class ViolationsStore:
             conn.execute(
                 """INSERT OR REPLACE INTO violations
                    (packet_id, violation_type, confidence, timestamp_secs,
-                    zone_name, plate_text, review_status,
+                    zone_name, plate_text, plate_source, review_status,
                     gps_lat, gps_lng, evidence_json, officer_notes)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     packet.packet_id,
                     packet.violation_type.value,
@@ -91,6 +99,7 @@ class ViolationsStore:
                     packet.timestamp_seconds,
                     packet.zone_name,
                     packet.plate_text,
+                    packet.plate_source,
                     packet.review_status.value,
                     packet.gps_lat,
                     packet.gps_lng,
@@ -123,12 +132,22 @@ class ViolationsStore:
                 "UPDATE violations SET review_status=? WHERE packet_id=?",
                 (new_status, action.packet_id),
             )
+            # Fetch zone + violation_type so the timeline row is fully populated
+            row = conn.execute(
+                "SELECT zone_name, violation_type, confidence FROM violations WHERE packet_id=?",
+                (action.packet_id,),
+            ).fetchone()
+            zone  = row["zone_name"]      if row else None
+            vtype = row["violation_type"] if row else None
+            conf  = row["confidence"]     if row else None
             conn.execute(
-                """INSERT INTO timeline (event, packet_id, officer_id, ts)
-                   VALUES (?,?,?,?)""",
-                (action.action, action.packet_id, action.officer_id, datetime.utcnow().isoformat()),
+                """INSERT INTO timeline (event, packet_id, officer_id, ts, zone, violation_type, confidence)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (action.action, action.packet_id, action.officer_id,
+                 datetime.utcnow().isoformat(), zone, vtype, conf),
             )
         return self.get(action.packet_id)
+
 
     # ------------------------------------------------------------------ read
 
@@ -241,6 +260,7 @@ class ViolationsStore:
             timestamp_seconds=row["timestamp_secs"],
             zone_name=row["zone_name"],
             plate_text=row["plate_text"],
+            plate_source=row["plate_source"],
             review_status=ReviewStatus(row["review_status"]),
             gps_lat=row["gps_lat"] or 12.9716,
             gps_lng=row["gps_lng"] or 77.5946,

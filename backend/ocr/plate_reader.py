@@ -7,7 +7,7 @@ Production mode (requires: pip install easyocr):
 
 Demo mode (no EasyOCR installed):
   - Deterministic synthetic plate from track_id hash
-  - Labelled [DEMO] in confidence field
+  - Returned with source="synthetic_demo" so the UI/API can label it clearly
 
 Switch:  set env var  CHALANREADY_OCR_MODE=real  to force EasyOCR attempt.
 """

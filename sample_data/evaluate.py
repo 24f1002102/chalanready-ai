@@ -49,9 +49,9 @@ def evaluate(detector: str = "color") -> dict:
     eval_db_path = ROOT / "sample_data" / "eval_output" / "eval.sqlite3"
 
     if not video_path.exists():
-        print(f"[ERROR] Video not found: {video_path}")
-        print("  Run:  python sample_data/create_synthetic_video.py")
-        sys.exit(1)
+        raise FileNotFoundError(
+            f"Video not found: {video_path}. Run: python sample_data/create_synthetic_video.py"
+        )
 
     # Use an isolated SQLite store so app/demo data cannot pollute metrics.
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +75,7 @@ def evaluate(detector: str = "color") -> dict:
     all_violations = store.list_all()
     detected_types: dict[str, int] = {}
     for v in all_violations:
-        vt = v.violation_type
+        vt = v.violation_type.value
         detected_types[vt] = detected_types.get(vt, 0) + 1
 
     print(f"\nDetected per type: {detected_types}\n")
