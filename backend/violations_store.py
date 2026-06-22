@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS violations (
     gps_lat         REAL DEFAULT 12.9716,
     gps_lng         REAL DEFAULT 77.5946,
     evidence_json   TEXT DEFAULT '[]',
+    metadata_json   TEXT DEFAULT '{}',
     officer_notes   TEXT
 );
 
@@ -69,6 +70,7 @@ class ViolationsStore:
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
             self._ensure_column(conn, "violations", "plate_source", "TEXT")
+            self._ensure_column(conn, "violations", "metadata_json", "TEXT DEFAULT '{}'")
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -85,13 +87,14 @@ class ViolationsStore:
 
     def add(self, packet: ViolationPacket) -> None:
         evidence_json = json.dumps([e.model_dump() for e in packet.evidence])
+        metadata_json = json.dumps(packet.metadata or {})
         with self._lock, self._connect() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO violations
                    (packet_id, violation_type, confidence, timestamp_secs,
                     zone_name, plate_text, plate_source, review_status,
-                    gps_lat, gps_lng, evidence_json, officer_notes)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    gps_lat, gps_lng, evidence_json, metadata_json, officer_notes)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     packet.packet_id,
                     packet.violation_type.value,
@@ -104,6 +107,7 @@ class ViolationsStore:
                     packet.gps_lat,
                     packet.gps_lng,
                     evidence_json,
+                    metadata_json,
                     packet.officer_notes,
                 ),
             )
@@ -248,11 +252,58 @@ class ViolationsStore:
 
     # ------------------------------------------------------------------ helpers
 
+    def export_csv(self, status: str | None = None) -> str:
+        """Export violations as CSV string. Optionally filter by status."""
+        import csv
+        import io
+        from datetime import datetime, timezone, timedelta
+        _IST = timezone(timedelta(hours=5, minutes=30))
+
+        packets = self.list_all(limit=10000)
+        if status:
+            try:
+                status_enum = ReviewStatus(status)
+                packets = [p for p in packets if p.review_status == status_enum]
+            except Exception:
+                pass
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Packet ID", "Violation Type", "Plate Number", "Plate Source",
+            "Zone", "Confidence (%)", "Status", "GPS Lat", "GPS Lng",
+            "Detector", "Camera ID", "Calibration", "Timestamp (IST)", "Officer Notes"
+        ])
+        for p in packets:
+            dt_ist = datetime.fromtimestamp(p.timestamp_seconds, tz=_IST)
+            metadata = p.metadata or {}
+            writer.writerow([
+                p.packet_id,
+                p.violation_type.value.replace("_", " ").title(),
+                p.plate_text if p.plate_text and p.plate_text != "PLATE_UNREAD" else "—",
+                p.plate_source or "—",
+                p.zone_name,
+                f"{round(p.confidence * 100, 1)}%",
+                p.review_status.value,
+                p.gps_lat or "",
+                p.gps_lng or "",
+                metadata.get("detector_name", ""),
+                metadata.get("camera_id", ""),
+                metadata.get("calibration_profile", ""),
+                dt_ist.strftime("%Y-%m-%d %H:%M:%S IST"),
+                p.officer_notes or "",
+            ])
+        return output.getvalue()
+
     @staticmethod
     def _row_to_packet(row: sqlite3.Row) -> ViolationPacket:
         evidence = json.loads(row["evidence_json"] or "[]")
+        metadata = json.loads(row["metadata_json"] or "{}")
         from .models.schemas import EvidenceAsset
         evidence_assets = [EvidenceAsset(**e) for e in evidence]
+        # Use stored GPS; fall back gracefully only if truly missing
+        gps_lat = row["gps_lat"]
+        gps_lng = row["gps_lng"]
         return ViolationPacket(
             packet_id=row["packet_id"],
             violation_type=ViolationType(row["violation_type"]),
@@ -262,9 +313,10 @@ class ViolationsStore:
             plate_text=row["plate_text"],
             plate_source=row["plate_source"],
             review_status=ReviewStatus(row["review_status"]),
-            gps_lat=row["gps_lat"] or 12.9716,
-            gps_lng=row["gps_lng"] or 77.5946,
+            gps_lat=float(gps_lat) if gps_lat is not None else 12.9716,
+            gps_lng=float(gps_lng) if gps_lng is not None else 77.5946,
             evidence=evidence_assets,
+            metadata=metadata,
             officer_notes=row["officer_notes"],
         )
 

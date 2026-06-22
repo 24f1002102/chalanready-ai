@@ -60,13 +60,21 @@ class HelmetRule:
     Uses a heuristic: the top 35% of a motorcycle bounding box is the rider's head zone.
     If that zone is predominantly skin-tone colored (no helmet), flag it.
 
+    Guards:
+    - Minimum bbox area of 1500px² — skips distant/tiny bikes where the crop
+      is too small for reliable detection.
+    - Minimum track age of 10 frames — avoids false positives on just-detected bikes.
+    - Skin-tone threshold of 30% (up from 25%) — reduces false positives on
+      light-coloured or white helmets.
+
     In production: use a dedicated helmet classifier model on the cropped region.
     """
     two_wheeler_classes: set[str] = field(
         default_factory=lambda: {"motorcycle", "bicycle"}
     )
-    # Minimum frames a rider must be tracked before flagging (avoids false positives)
     min_track_age: int = 10
+    min_bbox_area: int = 1500   # skip tiny/far-away bikes
+    skin_ratio_threshold: float = 0.30  # raised from 0.25 for fewer false positives
     flagged_tracks: set[int] = field(default_factory=set)
 
     def observe(
@@ -97,6 +105,11 @@ class HelmetRule:
             if h < 20 or w < 10:
                 return False
 
+            # Guard: skip tiny/distant bikes — head zone too small for reliable detection
+            bbox_area = h * w
+            if bbox_area < self.min_bbox_area:
+                return False
+
             # Crop head zone: top 35% of the bounding box
             head_y2 = y1 + int(h * 0.35)
             head_crop = frame[y1:head_y2, x1:x2]
@@ -105,14 +118,12 @@ class HelmetRule:
 
             # Convert to HSV and check for skin tone dominance (no helmet = skin visible)
             hsv = cv2.cvtColor(head_crop, cv2.COLOR_BGR2HSV)
-            # Skin tone range in HSV
             skin_lower = np.array([0, 30, 60], dtype=np.uint8)
             skin_upper = np.array([25, 170, 255], dtype=np.uint8)
             skin_mask = cv2.inRange(hsv, skin_lower, skin_upper)
             skin_ratio = np.sum(skin_mask > 0) / max(skin_mask.size, 1)
 
-            # If >25% of head zone is skin-colored → likely no helmet
-            if skin_ratio > 0.25:
+            if skin_ratio > self.skin_ratio_threshold:
                 self.flagged_tracks.add(track_id)
                 return True
         except Exception:

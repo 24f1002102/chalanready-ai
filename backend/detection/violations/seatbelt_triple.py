@@ -2,16 +2,16 @@
 Seatbelt non-compliance and triple riding detection.
 
 Seatbelt:
-  - Crops the driver-seat region (left 50%, upper-middle of car bbox).
-  - Checks for the diagonal belt strap using HSV grey/dark tone along
-    a diagonal line from left-shoulder to right-hip area.
-  - No belt found after min_track_age frames → flag.
+  - Crops the DRIVER REGION from the vehicle bounding box
+    (left 55%, upper-middle 55% of car bbox — where driver sits)
+  - Checks for diagonal belt strap using greyscale diagonal sampling
+  - No belt pattern found after min_track_age frames → flag
 
 Triple Riding:
-  - Crops the motorcycle bounding box.
-  - Counts distinct skin-tone blobs (approximate head/torso regions).
-  - If 3 or more blobs detected → triple riding.
-  - Also counts detected person-shaped contours by height ratio.
+  - Crops the motorcycle bounding box
+  - Counts distinct skin-tone blobs (approximate head/torso regions)
+  - Blobs must be at least 15px apart to avoid counting one person twice
+  - If 3+ distinct blobs detected → triple riding
 """
 from __future__ import annotations
 
@@ -23,16 +23,15 @@ class SeatbeltRule:
     """
     Detects seatbelt non-compliance in car/truck drivers.
 
-    Uses a pixel-level diagonal stripe heuristic:
+    Method:
     1. Crop driver region (left 55% width, upper 55% height of car bbox).
-    2. Convert to grayscale; look for a diagonal dark/grey stripe
-       (the seatbelt strap crosses from top-left to bottom-right).
-    3. If no stripe found after min_track_age frames → flag.
+    2. Convert to greyscale; look for a diagonal dark/grey stripe
+       (the seatbelt strap crosses from shoulder to hip diagonally).
+    3. If no belt stripe found after min_track_age frames → flag.
     """
     car_classes: set[str] = field(default_factory=lambda: {"car", "truck", "bus"})
     min_track_age: int = 15
     flagged_tracks: set[int] = field(default_factory=set)
-    # tracks that passed the check (belt found) — don't re-check
     cleared_tracks: set[int] = field(default_factory=set)
 
     def observe(
@@ -40,55 +39,56 @@ class SeatbeltRule:
         track_id: int,
         class_name: str,
         track_age: int,
-        frame,
+        vehicle_crop: "np.ndarray | None",  # already-cropped vehicle bbox region
     ) -> bool:
         if class_name not in self.car_classes:
             return False
-        if track_id in self.flagged_tracks:
-            return False
-        if track_id in self.cleared_tracks:
+        if track_id in self.flagged_tracks or track_id in self.cleared_tracks:
             return False
         if track_age < self.min_track_age:
             return False
-
-        # frame is passed as None in some call paths — guard
-        if frame is None:
+        if vehicle_crop is None:
             return False
 
         try:
             import cv2
             import numpy as np
 
-            # We don't have bbox here; a separate overload with bbox would be
-            # ideal, but the rule engine only passes frame. We sample the whole
-            # frame for grey-stripe patterns as a lightweight proxy.
-            # In the video pipeline the frame is the preprocessed crop from
-            # the tracker's bbox region passed through annotate_frame.
-            h, w = frame.shape[:2]
-            if h < 20 or w < 20:
+            h, w = vehicle_crop.shape[:2]
+            if h < 30 or w < 30:
                 return False
 
-            # Convert to greyscale
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Crop driver region: left 55% width, upper 55% height
+            driver_w = int(w * 0.55)
+            driver_h = int(h * 0.55)
+            driver_crop = vehicle_crop[:driver_h, :driver_w]
 
-            # A seatbelt appears as a near-diagonal dark stripe in the upper
-            # body region. We sample a diagonal strip from top-left to center.
-            # If variance along that diagonal is low (flat grey) → belt present.
+            if driver_crop.size == 0:
+                return False
+
+            gray = cv2.cvtColor(driver_crop, cv2.COLOR_BGR2GRAY)
+            dh, dw = gray.shape[:2]
+
+            # Sample diagonal from top-left (shoulder) to bottom-right (hip)
+            # A seatbelt appears as a dark diagonal stripe in this region
+            n = 25
             samples = []
-            n = 20
             for i in range(n):
-                rx = int(w * 0.05 + (w * 0.45) * i / n)
-                ry = int(h * 0.05 + (h * 0.50) * i / n)
-                if 0 <= ry < h and 0 <= rx < w:
+                rx = int(dw * 0.05 + (dw * 0.85) * i / n)
+                ry = int(dh * 0.05 + (dh * 0.85) * i / n)
+                if 0 <= ry < dh and 0 <= rx < dw:
                     samples.append(int(gray[ry, rx]))
 
-            if len(samples) < 5:
+            if len(samples) < 8:
                 return False
 
             arr = np.array(samples, dtype=float)
-            # Seatbelt stripe: dark pixels (belt colour < 80 grey) in sequence
+            # Belt is dark (< 80 greyscale) and appears as a consistent stripe
             dark_count = int(np.sum(arr < 80))
-            belt_detected = dark_count >= (n // 3)  # at least 1/3 of samples dark
+            # Need at least 1/3 of samples dark AND some variance
+            # (a uniform dark region is shadow, not a belt)
+            variance = float(np.std(arr))
+            belt_detected = dark_count >= (n // 3) and variance > 5.0
 
             if not belt_detected:
                 self.flagged_tracks.add(track_id)
@@ -107,17 +107,21 @@ class TripleRidingRule:
     Detects triple riding (3+ persons on a two-wheeler).
 
     Method:
-    1. Crop the motorcycle bounding box from the frame.
-    2. Detect skin-tone blobs (HSV-based) in the cropped region.
-    3. Run connected-component analysis on the skin mask.
-    4. If 3+ distinct blobs (each large enough to be a human head/torso) → flag.
+    1. Crop the motorcycle bbox.
+    2. Detect skin-tone blobs (HSV) in the cropped region.
+    3. Run connected-component analysis.
+    4. Filter blobs: must be large enough (> min_blob_area) AND
+       centroids must be at least min_separation_px apart
+       (avoids counting one person's head + shoulder as two people).
+    5. If 3+ distinct blobs → flag.
     """
     two_wheeler_classes: set[str] = field(
         default_factory=lambda: {"motorcycle", "bicycle"}
     )
     min_track_age: int = 10
     min_persons_threshold: int = 3
-    min_blob_area: int = 60   # minimum pixel area for a blob to count as a person
+    min_blob_area: int = 80
+    min_separation_px: float = 15.0   # blobs closer than this = same person
     flagged_tracks: set[int] = field(default_factory=set)
 
     def observe(
@@ -125,7 +129,7 @@ class TripleRidingRule:
         track_id: int,
         class_name: str,
         track_age: int,
-        frame,
+        vehicle_crop: "np.ndarray | None",
     ) -> bool:
         if class_name not in self.two_wheeler_classes:
             return False
@@ -133,20 +137,19 @@ class TripleRidingRule:
             return False
         if track_age < self.min_track_age:
             return False
-
-        if frame is None:
+        if vehicle_crop is None:
             return False
 
         try:
             import cv2
             import numpy as np
+            from math import dist
 
-            h, w = frame.shape[:2]
-            if h < 15 or w < 15:
+            h, w = vehicle_crop.shape[:2]
+            if h < 20 or w < 20:
                 return False
 
-            # Skin tone HSV range (covers Indian/South Asian tones)
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            hsv = cv2.cvtColor(vehicle_crop, cv2.COLOR_BGR2HSV)
             lower_skin = np.array([0, 20, 70], dtype=np.uint8)
             upper_skin = np.array([25, 180, 255], dtype=np.uint8)
             lower_skin2 = np.array([160, 20, 70], dtype=np.uint8)
@@ -156,22 +159,32 @@ class TripleRidingRule:
             mask2 = cv2.inRange(hsv, lower_skin2, upper_skin2)
             skin_mask = cv2.bitwise_or(mask1, mask2)
 
-            # Morphological close to merge nearby skin pixels
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
             skin_mask = cv2.morphologyEx(skin_mask, cv2.MORPH_CLOSE, kernel)
 
-            # Count connected components (each is a potential person)
-            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
                 skin_mask, connectivity=8
             )
 
-            person_blobs = 0
-            for label_idx in range(1, num_labels):  # skip background (0)
+            # Collect valid blobs
+            valid_centroids: list[tuple[float, float]] = []
+            for label_idx in range(1, num_labels):
                 area = stats[label_idx, cv2.CC_STAT_AREA]
-                if area >= self.min_blob_area:
-                    person_blobs += 1
+                if area < self.min_blob_area:
+                    continue
+                cx, cy = centroids[label_idx]
+                valid_centroids.append((cx, cy))
 
-            if person_blobs >= self.min_persons_threshold:
+            # Merge blobs that are too close (same person)
+            merged: list[tuple[float, float]] = []
+            for c in valid_centroids:
+                too_close = any(
+                    dist(c, m) < self.min_separation_px for m in merged
+                )
+                if not too_close:
+                    merged.append(c)
+
+            if len(merged) >= self.min_persons_threshold:
                 self.flagged_tracks.add(track_id)
                 return True
 

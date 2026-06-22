@@ -1,15 +1,15 @@
 # ChalanReady AI
 ## Automated Traffic Violation Detection & Officer Review System
-### Flipkart Gridlock Hackathon 2.0 — Problem Statement 3
-**Bengaluru Traffic Police · ASTraM Unit · June 2026**
+### Flipkart Gridlock Hackathon 2.0 - Problem Statement 3
+**Bengaluru Traffic Police - ASTraM Unit - June 2026**
 
 ---
 
 ## 1. Executive Summary
 
-ChalanReady AI is an **officer-in-the-loop** AI pipeline that automatically detects, classifies, and documents traffic violations from CCTV footage — while ensuring that **every enforcement action requires explicit human officer approval**. No challan is ever issued automatically.
+ChalanReady AI is an **officer-in-the-loop** AI pipeline that automatically detects, classifies, and documents traffic violations from CCTV footage - while ensuring that **every enforcement action requires explicit human officer approval**. No challan is ever issued automatically.
 
-> *"ChalanReady AI is not an autonomous enforcement robot. It is a force multiplier for traffic officers — turning 1 officer's reach into the reach of 50 cameras, while keeping every enforcement decision in human hands."*
+> *"ChalanReady AI is not an autonomous enforcement robot. It is a force multiplier for traffic officers - turning 1 officer's reach into the reach of 50 cameras, while keeping every enforcement decision in human hands."*
 
 ---
 
@@ -27,86 +27,34 @@ ChalanReady AI solves all four problems simultaneously.
 
 ## 3. System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CCTV Camera / Video File                     │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stage 1: Vehicle Detection                         │
-│  YOLOv8n (primary) → Color-HSV detector (offline fallback)     │
-│  Classes: car, motorcycle, bus, truck, bicycle                  │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stage 2: Multi-Object Tracking                     │
-│  Centroid-based tracker (dependency-free, real-time)           │
-│  Maintains trajectory history per vehicle track                │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stage 3: Violation Rule Engine                     │
-│  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────┐ │
-│  │ Wrong-Side Drive│  │ Illegal Parking   │  │Footpath Riding│ │
-│  │ Vector cosine   │  │ Zone polygon +    │  │ Zone polygon  │ │
-│  │ similarity check│  │ dwell-time logic  │  │ entry count   │ │
-│  └─────────────────┘  └──────────────────┘  └───────────────┘ │
-│  ┌─────────────────┐  ┌──────────────────┐                    │
-│  │ Stop-Line Viol. │  │ Helmet Detection  │                    │
-│  │ Line crossing + │  │ Head-zone skin    │                    │
-│  │ red-phase check │  │ tone analysis     │                    │
-│  └─────────────────┘  └──────────────────┘                    │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stage 4: License Plate OCR                         │
-│  Deterministic Indian plate generation (demo)                   │
-│  Production: EasyOCR with Indian plate regex validation        │
-│  Format: [STATE][DISTRICT][SERIES][NUMBER] e.g. KA05MG7341    │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stage 5: Evidence Packet Builder                   │
-│  Annotated JPEG frame at moment of violation                    │
-│  Metadata: timestamp, zone, GPS coords, confidence score       │
-│  Stored in ViolationPacket with unique UUID                    │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│         ⚠ HUMAN GATE — Officer Review Queue  ⚠                │
-│                                                                  │
-│  Officer sees: annotated image + plate + zone + confidence     │
-│  Officer actions: APPROVE → REJECT → FLAG for re-review        │
-│  NO enforcement action taken without human approval            │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stage 6: Analytics & Reporting                     │
-│  Violation heatmaps by zone, type, hour                        │
-│  Confidence score distribution                                  │
-│  Approval rate tracking                                        │
-│  Integration-ready for BTP ASTraM database                     │
-└─────────────────────────────────────────────────────────────────┘
+```text
+CCTV Camera / Uploaded Video
+  -> Image preprocessing (CLAHE + Gaussian denoise)
+  -> Vehicle detection (YOLOv8n local, color-HSV offline fallback)
+  -> Centroid multi-object tracking
+  -> Camera-calibrated violation rule engine
+     - wrong-side driving: trajectory direction vs configured lane vector
+     - illegal parking: no-parking polygon + anchored dwell time
+     - footpath riding: footpath polygon entry
+     - red-light/stop-line: calibrated signal ROI and stop line
+     - helmet/seatbelt/triple-riding: experimental review hints, disabled by default
+  -> Plate reading (EasyOCR when available, labelled fallback otherwise)
+  -> Evidence packet (annotated frame, timestamp, camera profile, confidence)
+  -> Officer review queue (approve, reject, flag)
+  -> Analytics and reporting
 ```
 
 ---
 
 ## 4. Violation Types Detected
 
-| Violation | Detection Method | Confidence |
-|-----------|-----------------|------------|
-| Wrong-side driving | Vector cosine similarity on trajectory | ~87% |
-| Illegal parking | Zone polygon + dwell-time threshold | ~94% |
-| Footpath riding | Zone polygon entry count | ~86% |
-| Helmet non-compliance | Head-zone HSV skin-tone analysis | ~82% |
-| Stop-line violation | Y-coordinate crossing + signal phase | ~89% |
+| Violation | Detection Method | Prototype Status |
+|-----------|------------------|------------------|
+| Wrong-side driving | Camera-calibrated trajectory direction | Active on calibrated profiles |
+| Illegal parking | Restricted polygon + anchored 60-frame dwell | Active on calibrated profiles |
+| Footpath riding | Footpath polygon entry count | Active on calibrated profiles |
+| Red-light / stop-line violation | Calibrated stop line + signal ROI | Active on calibrated profiles |
+| Helmet / seatbelt / triple riding | Heuristic review hints | Experimental, disabled by default |
 
 ---
 
@@ -118,7 +66,7 @@ Most automated traffic systems attempt full automation. ChalanReady AI deliberat
 - **Legal**: In India, traffic challans require an authorizing officer. Automated fines without human sign-off face legal challenges.
 - **Accuracy**: Even a 95% accurate AI has a 5% false positive rate. At 1,000 violations/day, that's 50 wrongful challans. Officers catch these.
 - **Trust**: Citizens and courts accept officer-reviewed evidence far more readily than purely automated evidence.
-- **Operational fit**: BTP officers currently review footage retrospectively. ChalanReady AI makes their review proactive and systematic — same workflow, 10x efficiency.
+- **Operational fit**: BTP officers currently review footage retrospectively. ChalanReady AI makes their review proactive and systematic - same workflow, 10x efficiency.
 
 **The force multiplier effect:**
 - Without AI: 1 officer can monitor ~3 cameras in real-time
@@ -137,7 +85,7 @@ Most automated traffic systems attempt full automation. ChalanReady AI deliberat
 | Frontend | Vanilla HTML/CSS/JS + Chart.js | No build step, deployable anywhere |
 | Image processing | OpenCV | Industry standard for video pipelines |
 | OCR | EasyOCR (planned) | Best open-source Indian plate recognition |
-| Map Integration | MapMyIndia SDK | Official partner — India's mapping infrastructure |
+| Map Integration | MapMyIndia SDK | Official partner - India's mapping infrastructure |
 
 ---
 
@@ -168,18 +116,18 @@ The FastAPI + Pydantic + async design makes the transition to production straigh
 
 ---
 
-## 9. AI Performance Metrics
+## 9. Synthetic Smoke-Test Metrics
 
-Evaluated with `sample_data/evaluate.py` on the offline synthetic CCTV dataset:
+Evaluated with `sample_data/evaluate.py` on an offline scripted synthetic CCTV clip:
 
 | Metric | Score | Scope |
 |--------|-------|-------|
-| Precision | 100% | 3 scripted violations |
-| Recall | 100% | 3 scripted violations |
-| F1-Score | 100% | 3 scripted violations |
+| Precision | 100% | Synthetic smoke test: 4 scripted violation events |
+| Recall | 100% | Synthetic smoke test: 4 scripted violation events |
+| F1-Score | 100% | Synthetic smoke test: 4 scripted violation events |
 | Processing speed | ~18 FPS | Synthetic CPU demo |
 
-Production metrics require real BTP CCTV footage with human-annotated ground truth.
+These numbers validate pipeline behavior on known scripted events, not production field accuracy. Production metrics still require real BTP CCTV footage with human-annotated ground truth.
 
 ---
 
@@ -199,7 +147,7 @@ start.bat
 2. **Review Queue**: All pending violations with Approve / Reject / Flag actions
 3. **Live Feed**: Annotated violation snapshot thumbnails
 4. **Analytics**: Confidence distribution, hourly timeline, zone heatmap
-5. **Violation Map**: Geographic hotspot canvas (MapMyIndia integration ready)
+5. **Violation Map**: Geographic hotspot canvas (MapMyIndia integration-ready)
 6. **AI Metrics**: Precision / Recall / F1 / mAP per violation type
 7. **Upload Video**: Drag-and-drop video processing with live log
 
@@ -207,14 +155,14 @@ start.bat
 
 ## 11. What Makes This Submission Stand Out
 
-1. **Ethical AI by design** — officer approval gate is not a feature; it's the architecture
-2. **5 violation types implemented** — wrong-side, parking, footpath, helmet, stop-line
-3. **Full-stack working prototype** — backend API + frontend dashboard + video pipeline
-4. **Evidence-grade outputs** — timestamped annotated JPEGs, Indian plate numbers, zone metadata
-5. **Partner integration ready** — MapMyIndia GPS fields and schema designed for their APIs
-6. **Real-world deployment plan** — Docker, PostgreSQL, RTSP streams, role-based auth mapped out
+1. **Ethical AI by design** - officer approval gate is not a feature; it's the architecture
+2. **4 calibrated validation events implemented** - wrong-side, parking, footpath, red-light/stop-line
+3. **Full-stack working prototype** - backend API + frontend dashboard + video pipeline
+4. **Evidence-grade outputs** - timestamped annotated JPEGs, Indian plate numbers, zone metadata
+5. **Partner integration ready** - MapMyIndia GPS fields and schema designed for their APIs
+6. **Real-world deployment plan** - Docker, PostgreSQL, RTSP streams, role-based auth mapped out
 
 ---
 
-*Submitted for Flipkart Gridlock Hackathon 2.0 — Problem Statement 3*
-*Bengaluru Traffic Police · ASTraM Unit · June 2026*
+*Submitted for Flipkart Gridlock Hackathon 2.0 - Problem Statement 3*
+*Bengaluru Traffic Police - ASTraM Unit - June 2026*

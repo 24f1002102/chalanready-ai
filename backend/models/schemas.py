@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -56,6 +56,7 @@ class ViolationPacket(BaseModel):
     plate_source: str | None = None
     review_status: ReviewStatus = ReviewStatus.pending
     evidence: list[EvidenceAsset] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     officer_notes: str | None = None
 
 

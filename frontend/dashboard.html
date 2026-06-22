@@ -116,6 +116,30 @@
       box-shadow: 0 0 6px var(--accent-green); margin-right: 6px;
       animation: pulse-dot 2s infinite;
     }
+    .status-line { margin-bottom: 6px; line-height: 1.35; }
+    .status-mini {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 2px 7px; border-radius: 99px;
+      font-size: 0.68rem; font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-2);
+      white-space: nowrap;
+    }
+    .status-mini.ai { color: var(--accent-green); border-color: rgba(16,185,129,0.25); background: rgba(16,185,129,0.08); }
+    .status-mini.demo { color: var(--accent-amber); border-color: rgba(245,158,11,0.28); background: rgba(245,158,11,0.10); }
+    .status-mini.warn { color: var(--accent-amber); border-color: rgba(245,158,11,0.28); background: rgba(245,158,11,0.10); }
+    .calibration-warning {
+      display: none;
+      margin-top: 8px;
+      padding: 9px 11px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(245,158,11,0.24);
+      background: rgba(245,158,11,0.08);
+      color: var(--accent-amber);
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
     @keyframes pulse-dot { 0%,100%{opacity:1}50%{opacity:0.4} }
 
     /* main */
@@ -527,7 +551,9 @@
     </nav>
 
     <div class="sidebar-footer">
-      <div style="margin-bottom:6px"><span class="status-dot"></span>API Connected</div>
+      <div class="status-line"><span class="status-dot"></span><span id="api-status-line">API Connected</span></div>
+      <div class="status-line" id="ai-status-line"><span class="status-mini warn">AI: checking</span></div>
+      <div class="status-line" id="ocr-status-line"><span class="status-mini warn">OCR: checking</span></div>
       <div style="color:var(--text-3);font-size:0.68rem">Bengaluru Traffic Police<br>ASTraM Unit · Officer Portal</div>
     </div>
   </aside>
@@ -541,7 +567,7 @@
       </div>
       <div class="topbar-right">
         <div class="topbar-time" id="clock">--:--:--</div>
-        <button class="btn btn-ghost" onclick="seedDemo()">🌱 Load Demo Data</button>
+        <button class="btn btn-ghost" onclick="runDemoPipeline()" id="btn-demo">🎬 Run Demo Pipeline</button>
         <button class="btn btn-primary" onclick="refreshAll()">⟳ Refresh</button>
       </div>
     </header>
@@ -578,6 +604,12 @@
           <div class="stat-label">Active Camera Zones</div>
           <div class="stat-delta delta-up" id="stat-cameras-delta">Loading zone data…</div>
         </div>
+        <div class="stat-card" style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(6,182,212,0.08));border-color:rgba(16,185,129,0.2)">
+          <div class="stat-icon">💰</div>
+          <div class="stat-val" id="stat-fine-revenue" style="color:var(--accent-green)">&#8377;0</div>
+          <div class="stat-label">Est. Fine Revenue</div>
+          <div class="stat-delta delta-up" id="stat-fine-delta">₹500 per approved challan</div>
+        </div>
       </div>
 
       <div class="two-col">
@@ -599,7 +631,7 @@
         <div class="card">
           <div class="card-title">Recent Activity Feed</div>
           <div id="activity-feed" style="max-height:220px;overflow-y:auto;">
-            <div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">Load demo data or process a video to see activity</div>
+            <div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">Run demo pipeline or process a video to see activity</div>
           </div>
         </div>
       </div>
@@ -633,6 +665,8 @@
         </select>
         <input class="search-input" id="filter-plate" placeholder="🔍 Search plate number…" oninput="applyFilters()" />
         <span style="color:var(--text-3);font-size:0.78rem" id="queue-count">0 records</span>
+        <button class="btn btn-ghost" onclick="exportCSV('approved')" style="margin-left:auto;font-size:0.75rem;padding:5px 12px">📥 Export Approved CSV</button>
+        <button class="btn btn-ghost" onclick="exportCSV()" style="font-size:0.75rem;padding:5px 12px">📄 Export All</button>
       </div>
 
       <div class="card" style="padding:0;overflow:hidden">
@@ -650,7 +684,7 @@
           </thead>
           <tbody id="queue-tbody">
             <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:32px">
-              Load demo data or process a video to populate the queue.
+              Run demo pipeline or process a video to populate the queue.
             </td></tr>
           </tbody>
         </table>
@@ -665,7 +699,7 @@
       </div>
       <div class="feed-grid" id="feed-grid">
         <div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:40px;font-size:0.85rem">
-          Process a video or load demo data to see violation snapshots.
+          Process a video or run demo pipeline to see violation snapshots.
         </div>
       </div>
     </section>
@@ -775,8 +809,8 @@
     <!-- ══ AI METRICS PAGE ══════════════════════════════ -->
     <section class="page" id="page-metrics">
       <div style="margin-bottom:20px">
-        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">AI Model Performance Metrics</h1>
-        <p style="color:var(--text-2);font-size:0.83rem">Reproducible offline evaluation on the synthetic CCTV dataset (3 scripted scenarios) · <span style="color:var(--accent-amber)">Production metrics require real BTP CCTV footage with human-annotated ground truth</span></p>
+        <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:4px">Synthetic Pipeline Smoke Test</h1>
+        <p style="color:var(--text-2);font-size:0.83rem">Reproducible offline evaluation on the synthetic CCTV dataset (4 scripted violation events) · <span style="color:var(--accent-amber)">Production metrics require real BTP CCTV footage with human-annotated ground truth</span></p>
       </div>
 
       <!-- Metrics loaded dynamically from /api/metrics -->
@@ -806,7 +840,7 @@
 
       <div class="two-col">
         <div class="card">
-          <div class="card-title">Per-Violation Accuracy <span style="font-size:0.7rem;color:var(--text-3);font-weight:400">Real evaluation on synthetic dataset</span></div>
+          <div class="card-title">Per-Violation Smoke Test <span style="font-size:0.7rem;color:var(--text-3);font-weight:400">Scripted synthetic dataset</span></div>
           <table class="violation-table" style="margin-top:-8px">
             <thead><tr><th>Violation Type</th><th>GT</th><th>Detected</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead>
             <tbody id="metrics-tbody">
@@ -878,24 +912,28 @@
 
             <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:center;gap:10px">
-                <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Camera Zone</label>
+                <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Camera</label>
+                <select class="filter-select" id="camera-select" style="flex:1">
+                  <option value="bengaluru_generic_upload">Loading cameras…</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Zone</label>
                 <select class="filter-select" id="zone-select" style="flex:1">
-                  <option>Zone-A / MG Road</option>
-                  <option>Zone-B / Indiranagar</option>
-                  <option>Zone-C / Koramangala</option>
-                  <option>Zone-D / Whitefield</option>
-                  <option>Zone-E / Jayanagar</option>
+                  <option>Loading zones…</option>
                 </select>
               </div>
               <div style="display:flex;align-items:center;gap:10px">
                 <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Detector</label>
                 <select class="filter-select" id="detector-select" style="flex:1">
-                  <option value="color" selected>Color (Synthetic demo)</option>
-                  <option value="auto">Auto (YOLOv8 → Color fallback)</option>
-                  <option value="yolo">YOLOv8 (Requires weights)</option>
+                  <option value="auto" selected>Auto (prefer YOLOv8n AI)</option>
+                  <option value="yolo">YOLOv8n (AI Mode)</option>
+                  <option value="color">Color Detector (Synthetic Demo)</option>
                 </select>
               </div>
             </div>
+
+            <div class="calibration-warning" id="calibration-warning"></div>
 
             <button class="btn btn-primary" id="upload-btn" style="width:100%;margin-top:16px;justify-content:center;padding:12px"
               onclick="uploadVideo()" disabled>
@@ -946,15 +984,18 @@
               <input type="file" id="img-file-input" accept=".jpg,.jpeg,.png,.bmp,.webp" style="display:none" onchange="handleImgSelect(event)"/>
             </div>
             <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
-              <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Camera Zone</label>
-              <select class="filter-select" id="img-zone-select" style="flex:1">
-                <option>Zone-A / MG Road</option>
-                <option>Zone-B / Indiranagar</option>
-                <option>Zone-C / Koramangala</option>
-                <option>Zone-D / Whitefield</option>
-                <option>Zone-E / Jayanagar</option>
+              <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Camera</label>
+              <select class="filter-select" id="img-camera-select" style="flex:1">
+                <option value="bengaluru_generic_upload">Loading cameras…</option>
               </select>
             </div>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+              <label style="font-size:0.8rem;color:var(--text-2);min-width:80px">Zone</label>
+              <select class="filter-select" id="img-zone-select" style="flex:1">
+                <option>Loading zones…</option>
+              </select>
+            </div>
+            <div class="calibration-warning" id="img-calibration-warning"></div>
             <button class="btn btn-primary" id="img-analyze-btn" style="width:100%;margin-top:14px;justify-content:center;padding:12px"
               onclick="analyzeImage()" disabled>
               🔍 Analyze for Violations
@@ -971,7 +1012,7 @@
               <div>✅ <strong style="color:var(--text-1)">Stage 1:</strong> CLAHE histogram equalisation on L-channel (LAB)</div>
               <div>✅ <strong style="color:var(--text-1)">Stage 2:</strong> Gaussian blur (3×3, σ=0.5) to suppress compression noise</div>
               <div>✅ <strong style="color:var(--text-1)">Stage 3:</strong> Vehicle detection (YOLOv8n / Color-HSV fallback)</div>
-              <div>✅ <strong style="color:var(--text-1)">Stage 4:</strong> Violation rule engine (5 violation types)</div>
+              <div>✅ <strong style="color:var(--text-1)">Stage 4:</strong> Camera-calibrated violation rule engine</div>
               <div>✅ <strong style="color:var(--text-1)">Stage 5:</strong> License plate OCR (EasyOCR / synthetic demo)</div>
               <div>✅ <strong style="color:var(--text-1)">Stage 6:</strong> Evidence packet → Officer review queue</div>
             </div>
@@ -986,6 +1027,7 @@
           <div class="card">
             <div class="card-title">🖼️ Annotated Evidence Frame
               <span id="img-vcount-badge" style="font-size:0.72rem;background:var(--accent-red);color:#fff;padding:2px 8px;border-radius:99px;font-weight:700"></span>
+              <span id="img-mode-badge"></span>
             </div>
             <img id="img-annotated" src="" alt="Annotated violation frame"
               style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);display:block"/>
@@ -1081,33 +1123,70 @@ async function apiPost(path, body) {
   return r.json();
 }
 
-// ── SEED DEMO ────────────────────────────────────────────────────────────
+function detectorModeBadge(isDemoMode) {
+  return isDemoMode
+    ? '<span class="status-mini demo">Demo Mode</span>'
+    : '<span class="status-mini ai">AI Mode</span>';
+}
+
+async function loadAIStatus() {
+  const aiLine = document.getElementById('ai-status-line');
+  const ocrLine = document.getElementById('ocr-status-line');
+  try {
+    const status = await apiGet('/ai/status');
+    const aiReady = status.detector?.ai_mode_ready;
+    const ocrReady = status.ocr?.available;
+    if (aiLine) {
+      aiLine.innerHTML = aiReady
+        ? '<span class="status-mini ai">YOLOv8n AI ready</span>'
+        : '<span class="status-mini demo">Synthetic detector available</span>';
+    }
+    if (ocrLine) {
+      ocrLine.innerHTML = ocrReady
+        ? '<span class="status-mini ai">EasyOCR ready</span>'
+        : '<span class="status-mini warn">OCR unread fallback</span>';
+    }
+  } catch(e) {
+    if (aiLine) aiLine.innerHTML = '<span class="status-mini warn">AI status unavailable</span>';
+    if (ocrLine) ocrLine.innerHTML = '<span class="status-mini warn">OCR status unavailable</span>';
+  }
+}
+
+async function runDemoPipeline() {
+  const btn = document.getElementById('btn-demo');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Running calibrated demo pipeline...';
+  try {
+    const res = await fetch(API + '/demo/process', { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const src = data.video_source === 'real_cctv' ? '🎥 Real CCTV' : '🧪 Synthetic';
+    const mode = data.demo_mode ? 'Demo Mode' : 'AI Mode';
+    toast(`Pipeline done: ${data.new_candidates_added ?? data.violations_detected} candidate(s) added from ${src} (${mode}).`, 'approve', 6000);
+    showDemoBanner(false);
+    await refreshAll();
+  } catch(e) {
+    toast('❌ Pipeline failed: ' + e.message, 'reject', 6000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+
+// ──────────────────────────────────────────────────────────────────────────
 function showDemoBanner(show) {
   let banner = document.getElementById('demo-data-banner');
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'demo-data-banner';
-    banner.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:8px 20px;font-size:0.78rem;color:#f59e0b;font-weight:600;letter-spacing:0.03em;backdrop-filter:blur(8px);pointer-events:none';
-    banner.textContent = '🌱 DEMO MODE — Synthetic data loaded. Not real detection output.';
+    banner.style.cssText = 'display:none';
     document.body.appendChild(banner);
   }
   banner.style.display = show ? 'block' : 'none';
 }
 
-async function seedDemo() {
-  try {
-    const res = await fetch(API + '/demo/seed', { method: 'POST' });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    showDemoBanner(true);
-    toast(`✅ ${data.message}`, 'approve', 5000);
-    await refreshAll();
-  } catch(e) {
-    toast('❌ Cannot reach API — make sure uvicorn is running on port 8000.', 'reject', 6000);
-  }
-}
-
-// ── REFRESH ALL ──────────────────────────────────────────────────────────
 async function refreshAll() {
   try {
     const [violations, analytics] = await Promise.all([
@@ -1134,6 +1213,14 @@ function updateStats(a) {
   document.getElementById('stat-approved').textContent = a.approved_challans ?? 0;
   document.getElementById('stat-approval-rate').textContent =
     (a.approval_rate ?? 0) + '% approval rate';
+
+  // Est. Fine Revenue: ₹500 per approved challan
+  const approved = a.approved_challans ?? 0;
+  const revenue = approved * 500;
+  const revEl = document.getElementById('stat-fine-revenue');
+  if (revEl) revEl.textContent = '₹' + revenue.toLocaleString('en-IN');
+  const revDelta = document.getElementById('stat-fine-delta');
+  if (revDelta) revDelta.textContent = `${approved} approved × ₹500 avg fine`;
 
   const byType = a.by_type || {};
   // All 8 violation types
@@ -1343,26 +1430,39 @@ function applyFilters(violations) {
   }
   tbody.innerHTML = filtered.map(v => {
     const shortId = v.packet_id.slice(0,8);
+    const meta = v.metadata || {};
+    const demoModeBadge = meta.is_demo_mode ? ' <span class="status-mini demo">Demo Mode</span>' : '';
     const statusBadge = `<span class="badge badge-${v.review_status.replace('_for_re_review','').replace('flagged','flagged')}">${
       {'pending':'⏳ Pending','approved':'✅ Approved','rejected':'❌ Rejected','flagged_for_re_review':'🚩 Flagged'}[v.review_status] ?? v.review_status
     }</span>`;
     const vtypeFmt = v.violation_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const confPct = Math.round(v.confidence * 100);
     const confColor = confPct>=80?'var(--accent-green)':confPct>=60?'var(--accent-amber)':'var(--accent-red)';
-    const plateSource = v.plate_source && v.plate_source !== 'easyocr'
-      ? `<span class="plate-source" title="Synthetic OCR fallback, not hardcoded evidence">DEMO OCR</span>`
-      : '';
+    // Honest plate display: never show PLATE_UNREAD as a real plate
+    const plateDisplay = v.plate_text && v.plate_text !== 'PLATE_UNREAD' ? v.plate_text : null;
+    const plateSource = (() => {
+      if (!v.plate_source) return '';
+      if (v.plate_source === 'easyocr') {
+        return `<span class="plate-source" style="color:var(--accent-green);background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3)" title="Real OCR — verified">✓ OCR</span>`;
+      }
+      if (v.plate_source === 'ocr_unavailable') {
+        return `<span class="plate-source" style="color:var(--text-3);background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1)" title="EasyOCR not installed">⚠ N/A</span>`;
+      }
+      return `<span class="plate-source" title="Source: ${v.plate_source}">${v.plate_source.replace(/_/g,' ')}</span>`;
+    })();
     const actions = v.review_status === 'pending'
       ? `<div class="action-btns">
-           <button class="act-btn act-approve" onclick="reviewAction('${v.packet_id}','approve')">✓ Approve</button>
-           <button class="act-btn act-reject"  onclick="reviewAction('${v.packet_id}','reject')">✗ Reject</button>
-           <button class="act-btn act-flag"    onclick="reviewAction('${v.packet_id}','flag')">⚑ Flag</button>
+           <button class="act-btn act-approve" onclick="event.stopPropagation();reviewAction('${v.packet_id}','approve')">✓ Approve</button>
+           <button class="act-btn act-reject"  onclick="event.stopPropagation();reviewAction('${v.packet_id}','reject')">✗ Reject</button>
+           <button class="act-btn act-flag"    onclick="event.stopPropagation();reviewAction('${v.packet_id}','flag')">⚑ Flag</button>
          </div>`
       : `<span style="color:var(--text-3);font-size:0.75rem">Reviewed</span>`;
-    return `<tr>
+    // Store full violation data as JSON for modal
+    const vJson = encodeURIComponent(JSON.stringify(v));
+    return `<tr style="cursor:pointer" onclick="openEvidenceModal(JSON.parse(decodeURIComponent('${vJson}')))" title="Click to view evidence">
       <td style="font-family:'JetBrains Mono',monospace;font-size:0.73rem;color:var(--text-3)">${shortId}…</td>
-      <td><span class="vtype-tag vtype-${v.violation_type}">${vtypeFmt}</span></td>
-      <td>${v.plate_text ? `<span class="plate-text">${v.plate_text}</span>${plateSource}` : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td><span class="vtype-tag vtype-${v.violation_type}">${vtypeFmt}</span>${demoModeBadge}</td>
+      <td>${plateDisplay ? `<span class="plate-text">${plateDisplay}</span>${plateSource}` : `<span style="color:var(--text-3)">— ${plateSource}</span>`}</td>
       <td style="font-size:0.78rem;color:var(--text-2)">${v.zone_name}</td>
       <td>
         <div class="conf-bar">
@@ -1371,7 +1471,7 @@ function applyFilters(violations) {
         </div>
       </td>
       <td>${statusBadge}</td>
-      <td>${actions}</td>
+      <td onclick="event.stopPropagation()">${actions}</td>
     </tr>`;
   }).join('');
 }
@@ -1393,18 +1493,26 @@ async function reviewAction(packetId, action) {
 function renderFeed(violations) {
   const grid = document.getElementById('feed-grid');
   if (!violations.length) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:40px;font-size:0.85rem">Process a video or load demo data.</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:40px;font-size:0.85rem">Process a video or run demo pipeline.</div>';
     return;
   }
   const vtype_labels = {
-    'wrong_side_driving':        { icon:'🚗', label:'Wrong-Side Driving', color:'var(--accent-red)' },
-    'illegal_or_footpath_parking':{ icon:'🚫', label:'Illegal Parking',    color:'var(--accent-amber)' },
-    'footpath_riding':           { icon:'🛵', label:'Footpath Riding',     color:'var(--accent-violet)' },
-    'helmet_non_compliance':     { icon:'⛑️', label:'No Helmet',           color:'var(--accent-cyan)' },
-    'stop_line_violation':       { icon:'🛑', label:'Stop-Line',           color:'var(--accent-red)' },
+    'wrong_side_driving':          { icon:'🚗', label:'Wrong-Side Driving',     color:'var(--accent-red)' },
+    'illegal_or_footpath_parking': { icon:'🚫', label:'Illegal Parking',        color:'var(--accent-amber)' },
+    'illegal_parking':             { icon:'🚫', label:'Illegal Parking',        color:'var(--accent-amber)' },
+    'footpath_riding':             { icon:'🛵', label:'Footpath Riding',        color:'var(--accent-violet)' },
+    'helmet_non_compliance':       { icon:'⛑️', label:'No Helmet',             color:'var(--accent-cyan)' },
+    'stop_line_violation':         { icon:'🛑', label:'Stop-Line Violation',   color:'var(--accent-red)' },
+    'stopline':                    { icon:'🛑', label:'Stop-Line Violation',   color:'var(--accent-red)' },
+    'red_light_violation':         { icon:'🔴', label:'Red-Light Violation',   color:'#fca5a5' },
+    'triple_riding':               { icon:'👥', label:'Triple Riding',         color:'var(--accent-amber)' },
+    'seatbelt_non_compliance':     { icon:'🔒', label:'No Seatbelt',           color:'var(--accent-green)' },
+    'helmet':                      { icon:'⛑️', label:'No Helmet',             color:'var(--accent-cyan)' },
+    'seatbelt':                    { icon:'🔒', label:'No Seatbelt',           color:'var(--accent-green)' },
   };
   grid.innerHTML = violations.slice(0,12).map(v => {
     const vt = vtype_labels[v.violation_type] || { icon:'⚠️', label:v.violation_type, color:'var(--text-2)' };
+    const meta = v.metadata || {};
     const statusColor = v.review_status==='approved'?'var(--accent-green)':v.review_status==='rejected'?'var(--accent-red)':'var(--accent-amber)';
     const snapFile = v.snapshot_filenames?.[0];
     const confPct = Math.round(v.confidence * 100);
@@ -1416,13 +1524,14 @@ function renderFeed(violations) {
           <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);margin-top:6px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;z-index:1">${vt.label}</div>
           <div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.6)">AI Evidence Frame</div>
         </div>`;
+    const demoModeFeedBadge = meta.is_demo_mode ? ' <span class="status-mini demo" style="font-size:0.6rem">Demo</span>' : '';
     return `<div class="feed-card">
       <div class="feed-img">
         ${imgContent}
         <span class="feed-violation-badge">⚠ VIOLATION</span>
       </div>
       <div class="feed-body">
-        <div class="feed-title" style="color:${vt.color}">${vt.icon} ${vt.label}</div>
+        <div class="feed-title" style="color:${vt.color}">${vt.icon} ${vt.label}${demoModeFeedBadge}</div>
         <div class="feed-meta">
           <span>${v.plate_text ? '🚘 '+v.plate_text : '📍 '+v.zone_name}</span>
           <span style="color:${statusColor}">● ${v.review_status.replace('_for_re_review','')}</span>
@@ -1443,7 +1552,7 @@ function renderAnalytics(a) {
   if (hm) {
     const maxZ = Math.max(...Object.values(byZone), 1);
     if (Object.keys(byZone).length === 0) {
-      hm.innerHTML = '<div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">No zone data yet. Process a video or load demo data.</div>';
+      hm.innerHTML = '<div style="color:var(--text-3);font-size:0.8rem;text-align:center;padding:20px">No zone data yet. Process a video or run demo pipeline.</div>';
     } else {
       hm.innerHTML = Object.entries(byZone).map(([zone, count]) =>
         `<div style="display:flex;align-items:center;gap:12px">
@@ -1465,14 +1574,35 @@ let _leafletMarkers = [];
 function renderMap(a) { initLeafletMap(a?.by_zone); }
 
 function initLeafletMap(byZone) {
-  // Bengaluru zones with real GPS coordinates
-  const zones = [
-    { name:'Zone-A / MG Road',      lat:12.9716, lng:77.5946, color:'#ef4444' },
-    { name:'Zone-B / Indiranagar',  lat:12.9784, lng:77.6408, color:'#f59e0b' },
-    { name:'Zone-C / Koramangala',  lat:12.9352, lng:77.6245, color:'#8b5cf6' },
-    { name:'Zone-D / Whitefield',   lat:12.9698, lng:77.7500, color:'#06b6d4' },
-    { name:'Zone-E / Jayanagar',    lat:12.9250, lng:77.5938, color:'#10b981' },
+  // Build zone list from API-loaded camera profiles
+  // Falls back to 5 default Bengaluru zones if profiles not yet loaded
+  const ZONE_COLORS = ['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#10b981','#3b82f6','#fb923c','#34d399'];
+  const sourceProfiles = _cameraProfiles.length > 0 ? _cameraProfiles : [
+    { zone_name:'Zone-A / MG Road',     gps_lat:12.9716, gps_lng:77.5946 },
+    { zone_name:'Zone-B / Indiranagar', gps_lat:12.9784, gps_lng:77.6408 },
+    { zone_name:'Zone-C / Koramangala', gps_lat:12.9352, gps_lng:77.6245 },
+    { zone_name:'Zone-D / Whitefield',  gps_lat:12.9698, gps_lng:77.7500 },
+    { zone_name:'Zone-E / Jayanagar',   gps_lat:12.9250, gps_lng:77.5938 },
+    { zone_name:'Zone-F / Electronic City', gps_lat:12.8398, gps_lng:77.6770 },
+    { zone_name:'Zone-G / Silk Board',  gps_lat:12.9177, gps_lng:77.6238 },
+    { zone_name:'Zone-H / Hebbal',       gps_lat:13.0358, gps_lng:77.5970 },
+    { zone_name:'Zone-I / Majestic',     gps_lat:12.9767, gps_lng:77.5713 },
+    { zone_name:'Zone-J / Marathahalli', gps_lat:12.9569, gps_lng:77.7011 },
   ];
+
+  // Deduplicate by zone_name, assign color
+  const seenZones = new Map();
+  sourceProfiles.forEach((p, i) => {
+    if (!seenZones.has(p.zone_name)) {
+      seenZones.set(p.zone_name, {
+        name: p.zone_name,
+        lat: p.gps_lat,
+        lng: p.gps_lng,
+        color: ZONE_COLORS[seenZones.size % ZONE_COLORS.length],
+      });
+    }
+  });
+  const zones = Array.from(seenZones.values());
   byZone = byZone || {};
 
   if (!_leafletMap) {
@@ -1523,14 +1653,16 @@ function initLeafletMap(byZone) {
   // Fix map render when tab becomes visible
   setTimeout(() => { if (_leafletMap) _leafletMap.invalidateSize(); }, 100);
 
-  // Zone summary table (keep it)
+  // Zone summary table — now API-driven
   const zst = document.getElementById('zone-summary-table');
   if (zst) {
-    zst.innerHTML = `<table class="violation-table"><thead><tr><th>Zone</th><th>Violations</th><th>Status</th></tr></thead><tbody>
+    zst.innerHTML = `<table class="violation-table"><thead><tr><th>Zone</th><th>Cameras</th><th>Violations</th><th>Status</th></tr></thead><tbody>
       ${zones.map(z => {
         const count = byZone[z.name] || 0;
+        const camCount = sourceProfiles.filter(p => p.zone_name === z.name).length;
         return `<tr>
           <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${z.color};margin-right:8px"></span>${z.name}</td>
+          <td style="color:var(--text-2)">${camCount}</td>
           <td style="font-weight:700">${count}</td>
           <td><span class="badge ${count > 3 ? 'badge-pending' : 'badge-approved'}">${count > 3 ? '⚠ High' : '✓ Normal'}</span></td>
         </tr>`;
@@ -1538,13 +1670,6 @@ function initLeafletMap(byZone) {
     </tbody></table>`;
   }
 }
-
-// drawMap() removed — Leaflet map (initLeafletMap) handles all map rendering.
-
-
-
-
-
 
 // ── UPLOAD ───────────────────────────────────────────────────────────────
 let selectedFile = null;
@@ -1587,6 +1712,7 @@ async function uploadVideo() {
 
   const zone = document.getElementById('zone-select').value;
   const detector = document.getElementById('detector-select').value;
+  const cameraId = document.getElementById('camera-select').value || 'bengaluru_generic_upload';
 
   logLine('📁 Reading video file…');
   progressBar.style.width = '15%';
@@ -1595,7 +1721,7 @@ async function uploadVideo() {
   const fd = new FormData();
   fd.append('file', selectedFile);
 
-  const url = `${API}/videos/process?detector=${detector}&zone_name=${encodeURIComponent(zone)}`;
+  const url = `${API}/videos/process?detector=${detector}&zone_name=${encodeURIComponent(zone)}&camera_id=${encodeURIComponent(cameraId)}`;
 
   try {
     logLine(`⬆️ Sending to ChalanReady AI backend (detector=${detector})…`);
@@ -1615,13 +1741,23 @@ async function uploadVideo() {
     progressLabel.textContent = 'Complete!';
 
     const r = data.result;
+    const isDemoMode = !!(data.demo_mode || r.is_demo_mode);
+    const calibrationWarning = data.calibration_warning || r.calibration_warning;
     logLine(`✅ Done! Processed ${r.frames_processed} frames at ${r.fps.toFixed(1)} fps`);
     logLine(`🎯 Detections: ${r.detections_seen} | Tracks: ${r.tracks_seen} | Violations: ${r.violations_detected}`);
     logLine(`📂 Output: ${r.output_path?.split('\\').pop() ?? 'N/A'}`);
     logLine(`📸 Snapshots saved to: ${r.snapshots_dir?.split('\\').pop() ?? 'N/A'}`);
 
+    if (isDemoMode) logLine('Synthetic Demo detector was used. Use YOLOv8n AI Mode for real CCTV evidence.');
+    if (calibrationWarning) logLine(calibrationWarning);
+
     document.getElementById('result-card').style.display = 'block';
     document.getElementById('result-body').innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        ${detectorModeBadge(isDemoMode)}
+        ${calibrationWarning ? `<span class="status-mini warn">Generic calibration</span>` : ''}
+      </div>
+      ${calibrationWarning ? `<div class="calibration-warning" style="display:block;margin-bottom:12px">${calibrationWarning}</div>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.82rem">
         <div><span style="color:var(--text-3)">Frames processed</span><br><strong>${r.frames_processed}</strong></div>
         <div><span style="color:var(--text-3)">FPS</span><br><strong>${(r.fps||0).toFixed(1)}</strong></div>
@@ -1675,14 +1811,17 @@ async function analyzeImage() {
   btn.textContent = '⏳ Analyzing…';
 
   const zone = document.getElementById('img-zone-select').value;
+  const imgCameraId = document.getElementById('img-camera-select').value || 'bengaluru_generic_upload';
   const fd = new FormData();
   fd.append('file', selectedImgFile);
-  const url = `${API}/images/analyze?zone_name=${encodeURIComponent(zone)}&detector=color`;
+  const url = `${API}/images/analyze?zone_name=${encodeURIComponent(zone)}&detector=auto&camera_id=${encodeURIComponent(imgCameraId)}`;
 
   try {
     const resp = await fetch(url, { method: 'POST', body: fd });
     if (!resp.ok) { const err = await resp.text(); throw new Error(err); }
     const data = await resp.json();
+    const isDemoMode = !!data.demo_mode;
+    const calibrationWarning = data.calibration_warning;
 
     // Show annotated image
     document.getElementById('img-annotated').src = data.annotated_image;
@@ -1694,6 +1833,13 @@ async function analyzeImage() {
     const badge = document.getElementById('img-vcount-badge');
     badge.textContent = vcount > 0 ? `${vcount} violation${vcount > 1 ? 's' : ''} found` : 'Clean';
     badge.style.background = vcount > 0 ? 'var(--accent-red)' : 'var(--accent-green)';
+    const modeBadge = document.getElementById('img-mode-badge');
+    if (modeBadge) modeBadge.innerHTML = detectorModeBadge(isDemoMode);
+    const runtimeWarn = document.getElementById('img-calibration-warning');
+    if (runtimeWarn && calibrationWarning) {
+      runtimeWarn.textContent = calibrationWarning;
+      runtimeWarn.style.display = 'block';
+    }
 
     // Signal badge
     const sigBadge = document.getElementById('img-signal-badge');
@@ -1771,7 +1917,7 @@ async function loadMetrics() {
   const tbody = document.getElementById('metrics-tbody');
   const note  = document.getElementById('metrics-note');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">Loading real evaluation metrics…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">Loading synthetic smoke-test metrics...</td></tr>';
   try {
     const m = await apiGet('/metrics');
     const pct = v => v != null ? Math.round(v * 100) + '%' : 'N/A';
@@ -1787,7 +1933,7 @@ async function loadMetrics() {
     const framesEl = document.getElementById('m-dataset');
     if (framesEl) framesEl.textContent = (m.frames_processed || '—');
     const lblEl = document.getElementById('m-dataset-lbl');
-    if (lblEl) lblEl.textContent = m.dataset || 'Synthetic offline dataset';
+    if (lblEl) lblEl.textContent = m.display_title || m.dataset || 'Synthetic smoke test';
 
     const vtype_names = {
       'footpath_riding':            'Footpath Riding',
@@ -1817,7 +1963,7 @@ async function loadMetrics() {
         </tr>`;
       }).join('');
     }
-    if (note) note.textContent = m.note || '';
+    if (note) note.textContent = m.judge_note || m.note || '';
   } catch(e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--accent-red)">Could not load metrics — ensure the server is running.</td></tr>';
   }
@@ -1830,11 +1976,220 @@ async function loadCameraStats() {
     const el = document.getElementById('stat-cameras');
     const delta = document.getElementById('stat-cameras-delta');
     if (el) el.textContent = data.total_cameras ?? '—';
-    if (delta) delta.textContent = `${data.total_zones} zones · ${data.total_cameras} cameras active`;
+    const calibrated = data.profiles?.filter(p => p.profile_kind === 'calibrated').length ?? 0;
+    if (delta) delta.textContent = `${data.total_zones} zones · ${calibrated} fully calibrated`;
   } catch(e) {
     const el = document.getElementById('stat-cameras');
-    if (el) el.textContent = '14';
+    if (el) el.textContent = '-';
   }
+}
+
+// ── CAMERA PROFILES — Dynamic loader ─────────────────────────────────────
+let _cameraProfiles = [];
+
+function updateCalibrationWarning(selectId, targetId) {
+  const select = document.getElementById(selectId);
+  const target = document.getElementById(targetId);
+  if (!select || !target) return;
+  const profile = _cameraProfiles.find(p => p.camera_id === select.value);
+  const warning = profile?.calibration_warning;
+  if (warning) {
+    target.textContent = warning;
+    target.style.display = 'block';
+  } else {
+    target.textContent = '';
+    target.style.display = 'none';
+  }
+}
+
+async function loadCameraProfiles() {
+  try {
+    const data = await apiGet('/cameras');
+    _cameraProfiles = data.profiles || [];
+
+    // Populate upload page selects
+    const camSel  = document.getElementById('camera-select');
+    const zoneSel = document.getElementById('zone-select');
+    const imgCamSel  = document.getElementById('img-camera-select');
+    const imgZoneSel = document.getElementById('img-zone-select');
+
+    if (camSel) {
+      camSel.innerHTML = _cameraProfiles.map(p =>
+        `<option value="${p.camera_id}">${p.display_name}</option>`
+      ).join('');
+      if (_cameraProfiles.some(p => p.camera_id === 'bengaluru_generic_upload')) {
+        camSel.value = 'bengaluru_generic_upload';
+      }
+    }
+    if (zoneSel) {
+      const unique = [...new Set(_cameraProfiles.map(p => p.zone_name))];
+      zoneSel.innerHTML = unique.map(z => `<option>${z}</option>`).join('');
+    }
+    if (imgCamSel) {
+      imgCamSel.innerHTML = _cameraProfiles.map(p =>
+        `<option value="${p.camera_id}">${p.display_name}</option>`
+      ).join('');
+      if (_cameraProfiles.some(p => p.camera_id === 'bengaluru_generic_upload')) {
+        imgCamSel.value = 'bengaluru_generic_upload';
+      }
+    }
+    if (imgZoneSel) {
+      const unique = [...new Set(_cameraProfiles.map(p => p.zone_name))];
+      imgZoneSel.innerHTML = unique.map(z => `<option>${z}</option>`).join('');
+    }
+
+    // Sync zone-select when camera changes
+    if (camSel && zoneSel) {
+      const initialProfile = _cameraProfiles.find(p => p.camera_id === camSel.value);
+      if (initialProfile) zoneSel.value = initialProfile.zone_name;
+      camSel.addEventListener('change', () => {
+        const profile = _cameraProfiles.find(p => p.camera_id === camSel.value);
+        if (profile) zoneSel.value = profile.zone_name;
+        updateCalibrationWarning('camera-select', 'calibration-warning');
+      });
+      updateCalibrationWarning('camera-select', 'calibration-warning');
+    }
+    if (imgCamSel && imgZoneSel) {
+      const initialImgProfile = _cameraProfiles.find(p => p.camera_id === imgCamSel.value);
+      if (initialImgProfile) imgZoneSel.value = initialImgProfile.zone_name;
+      imgCamSel.addEventListener('change', () => {
+        const profile = _cameraProfiles.find(p => p.camera_id === imgCamSel.value);
+        if (profile) imgZoneSel.value = profile.zone_name;
+        updateCalibrationWarning('img-camera-select', 'img-calibration-warning');
+      });
+      updateCalibrationWarning('img-camera-select', 'img-calibration-warning');
+    }
+  } catch(e) {
+    console.warn('Could not load camera profiles:', e);
+    // Fallback values so upload still works
+    const fallback = [{
+      camera_id:'bengaluru_generic_upload',
+      display_name:'Generic CCTV',
+      zone_name:'User Uploaded / Needs Calibration',
+      profile_kind:'generic',
+      calibration_warning:'Using Bengaluru Generic Profile. Accuracy may improve with camera calibration.'
+    }];
+    _cameraProfiles = fallback;
+  }
+}
+
+// ── CSV EXPORT ────────────────────────────────────────────────────────────
+async function exportCSV(status) {
+  try {
+    const url = status ? `${API}/analytics/export?status=${status}` : `${API}/analytics/export`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = status ? `challans_${status}.csv` : 'all_violations.csv';
+    a.click();
+    toast('📥 CSV download started', 'approve');
+  } catch(e) {
+    toast('❌ Export failed: ' + e.message, 'reject');
+  }
+}
+
+// ── EVIDENCE MODAL ────────────────────────────────────────────────────────
+function openEvidenceModal(v) {
+  const existing = document.getElementById('evidence-modal');
+  if (existing) existing.remove();
+
+  const vtypeLabels = {
+    'wrong_side_driving':          { icon:'🚗', label:'Wrong-Side Driving',     color:'#ef4444' },
+    'illegal_or_footpath_parking': { icon:'🚫', label:'Illegal Parking',        color:'#f59e0b' },
+    'footpath_riding':             { icon:'🛵', label:'Footpath Riding',        color:'#8b5cf6' },
+    'helmet_non_compliance':       { icon:'⛑️', label:'No Helmet',             color:'#06b6d4' },
+    'stop_line_violation':         { icon:'🛑', label:'Stop-Line Violation',   color:'#ef4444' },
+    'red_light_violation':         { icon:'🔴', label:'Red-Light Violation',   color:'#fca5a5' },
+    'triple_riding':               { icon:'👥', label:'Triple Riding',         color:'#f59e0b' },
+    'seatbelt_non_compliance':     { icon:'🔒', label:'No Seatbelt',           color:'#10b981' },
+  };
+  const vt = vtypeLabels[v.violation_type] || { icon:'⚠️', label:v.violation_type, color:'#8da0c4' };
+  const confPct = Math.round(v.confidence * 100);
+  const confColor = confPct>=80?'#10b981':confPct>=60?'#f59e0b':'#ef4444';
+  const snapFile = v.snapshot_filenames?.[0];
+  const snapUrl = snapFile ? `${API.replace('/api','')}/snapshots/${snapFile}` : null;
+  const isPending = v.review_status === 'pending';
+  const plateDisplay = v.plate_text && v.plate_text !== 'PLATE_UNREAD' ? v.plate_text : null;
+  const meta = v.metadata || {};
+  const plateBadge = v.plate_source === 'easyocr'
+    ? '<span style="background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:99px;font-size:0.68rem;font-weight:700">✓ OCR Verified</span>'
+    : '<span style="background:rgba(255,255,255,0.06);color:#4a5980;padding:2px 8px;border-radius:99px;font-size:0.68rem">⚠ OCR Unavailable</span>';
+
+  const modal = document.createElement('div');
+  modal.id = 'evidence-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s ease';
+  modal.innerHTML = `
+    <div style="background:#0d1220;border:1px solid rgba(80,120,200,0.3);border-radius:16px;max-width:780px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+      <div style="padding:20px 24px;border-bottom:1px solid rgba(80,120,200,0.15);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:1.1rem;font-weight:800;color:${vt.color}">${vt.icon} ${vt.label}</div>
+          <div style="font-size:0.72rem;color:#4a5980;font-family:'JetBrains Mono',monospace;margin-top:2px">${v.packet_id}</div>
+        </div>
+        <button onclick="document.getElementById('evidence-modal').remove()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#f0f4ff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1.1rem">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+        <div style="padding:20px;border-right:1px solid rgba(80,120,200,0.1)">
+          ${snapUrl
+            ? `<img src="${snapUrl}" style="width:100%;border-radius:10px;border:1px solid rgba(80,120,200,0.2)" alt="Evidence snapshot" />`
+            : `<div style="width:100%;height:200px;background:linear-gradient(135deg,#0a1428,#0d1a2e);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid rgba(80,120,200,0.15)">
+                <div style="font-size:3rem">${vt.icon}</div>
+                <div style="font-size:0.75rem;color:#4a5980;margin-top:8px">Evidence snapshot not yet generated</div>
+              </div>`}
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Violation Type</div>
+            <div style="font-weight:700;color:${vt.color}">${vt.label}</div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">License Plate</div>
+            ${plateDisplay
+              ? `<span style="font-family:'JetBrains Mono',monospace;background:#1a2540;padding:4px 12px;border-radius:6px;font-size:0.9rem;font-weight:700;letter-spacing:0.1em">${plateDisplay}</span> ${plateBadge}`
+              : `<span style="color:#4a5980">Not readable — ${plateBadge}</span>`}
+          </div>
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">AI Confidence</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px">
+                <div style="width:${confPct}%;height:100%;background:${confColor};border-radius:99px"></div>
+              </div>
+              <span style="font-weight:700;color:${confColor};font-size:0.85rem">${confPct}%</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Evidence Metadata</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+              ${detectorModeBadge(!!meta.is_demo_mode)}
+              ${meta.calibration_warning ? '<span class="status-mini warn">Generic calibration</span>' : ''}
+            </div>
+            <div style="font-size:0.74rem;color:#8da0c4;line-height:1.55">
+              Detector: ${meta.detector_display_name || meta.detector_name || 'N/A'}<br>
+              Camera: ${meta.camera_id || 'N/A'} / ${meta.calibration_profile || 'N/A'}<br>
+              Rule: ${meta.rule_key || 'N/A'}${meta.frame_index !== undefined ? ` / Frame ${meta.frame_index}` : ''}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Camera Zone</div>
+            <div style="color:#f0f4ff">${v.zone_name}</div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">GPS</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#8da0c4">${v.gps_lat ? `${v.gps_lat.toFixed(4)}° N, ${v.gps_lng.toFixed(4)}° E` : 'Unavailable'}</div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem;color:#4a5980;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Status</div>
+            <span class="badge badge-${v.review_status.replace('_for_re_review','')}">●&nbsp;${v.review_status.replace('_for_re_review','').replace('_',' ').toUpperCase()}</span>
+          </div>
+          ${isPending ? `
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="act-btn act-approve" style="flex:1;padding:10px" onclick="reviewAction('${v.packet_id}','approve');document.getElementById('evidence-modal').remove()">✓ Approve Challan</button>
+            <button class="act-btn act-reject" style="flex:1;padding:10px" onclick="reviewAction('${v.packet_id}','reject');document.getElementById('evidence-modal').remove()">✗ Reject</button>
+            <button class="act-btn act-flag" style="padding:10px" onclick="reviewAction('${v.packet_id}','flag');document.getElementById('evidence-modal').remove()">⚑</button>
+          </div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────
@@ -1843,13 +2198,24 @@ window.addEventListener('load', () => {
   if (localStorage.getItem('sidebar-collapsed') === 'true') {
     document.body.classList.add('sidebar-collapsed');
   }
+  loadCameraProfiles();  // Load dynamic camera/zone dropdowns from API
+  loadAIStatus();
   refreshAll();
   loadCameraStats();
   loadMetrics();
-  // Auto-refresh every 30s
+  // Auto-refresh every 30s so the dashboard stays live
   setInterval(refreshAll, 30000);
-  // Reload camera count every 5 min
   setInterval(loadCameraStats, 300000);
+  setInterval(loadAIStatus, 300000);
+  // Check startup auto-processing status once after 8s
+  setTimeout(async () => {
+    try {
+      const status = await apiGet('/demo/status');
+      if (status.violations_in_store > 0) {
+        toast(`✅ AI pipeline ready — ${status.violations_in_store} violations in store.`, 'approve', 4000);
+      }
+    } catch(_) {}
+  }, 8000);
 });
 </script>
 </body>

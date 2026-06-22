@@ -9,3 +9,4 @@ opencv-python-headless>=4.9.0
 numpy>=1.26.0
 pydantic>=2.7.0
 aiofiles>=23.2.1
+easyocr>=1.7.1

@@ -2,3 +2,4 @@
 # Run: pip install -r requirements-local.txt
 -r requirements.txt
 ultralytics>=8.2.0
+easyocr>=1.7.1

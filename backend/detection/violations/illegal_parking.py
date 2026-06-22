@@ -30,6 +30,7 @@ class IllegalParkingRule:
     dwell_frames: int
     max_stationary_pixels: float = 12.0
     stationary_counts: dict[int, int] = field(default_factory=dict)
+    anchor_centers: dict[int, Point] = field(default_factory=dict)
 
     def observe(
         self,
@@ -43,14 +44,27 @@ class IllegalParkingRule:
         previous = centers[-2]
         if not point_in_polygon(current, self.restricted_zone):
             self.stationary_counts.pop(track_id, None)
+            self.anchor_centers.pop(track_id, None)
             return False
 
         dx = current[0] - previous[0]
         dy = current[1] - previous[1]
-        stationary = (dx * dx + dy * dy) ** 0.5 <= self.max_stationary_pixels
-        if stationary:
+        frame_movement = (dx * dx + dy * dy) ** 0.5
+
+        anchor = self.anchor_centers.get(track_id)
+        if anchor is None:
+            self.anchor_centers[track_id] = current
+            self.stationary_counts[track_id] = 1
+            return False
+
+        drift_x = current[0] - anchor[0]
+        drift_y = current[1] - anchor[1]
+        anchor_drift = (drift_x * drift_x + drift_y * drift_y) ** 0.5
+
+        if frame_movement <= self.max_stationary_pixels and anchor_drift <= self.max_stationary_pixels:
             self.stationary_counts[track_id] = self.stationary_counts.get(track_id, 0) + 1
         else:
-            self.stationary_counts[track_id] = 0
+            self.anchor_centers[track_id] = current
+            self.stationary_counts[track_id] = 1
 
         return self.stationary_counts[track_id] >= self.dwell_frames

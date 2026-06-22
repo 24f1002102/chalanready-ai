@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from uuid import uuid4
+from typing import Any
 
 from ..models.schemas import EvidenceAsset, ReviewStatus, ViolationPacket, ViolationType
 
@@ -15,6 +16,7 @@ def build_candidate_packet(
     plate_source: str | None = None,
     gps_lat: float = 12.9716,   # Bengaluru city centre default
     gps_lng: float = 77.5946,
+    metadata: dict[str, Any] | None = None,
 ) -> ViolationPacket:
     evidence = [
         EvidenceAsset(
@@ -35,4 +37,5 @@ def build_candidate_packet(
         evidence=evidence,
         gps_lat=gps_lat,
         gps_lng=gps_lng,
+        metadata=metadata or {},
     )
