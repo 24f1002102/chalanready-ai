@@ -46,10 +46,10 @@
     },
     "helmet_non_compliance": {
       "ground_truth": 0,
-      "detected": 0,
-      "precision": 1.0,
+      "detected": 1,
+      "precision": 0.0,
       "recall": 1.0,
-      "f1": 1.0
+      "f1": 0.0
     },
     "seatbelt_non_compliance": {
       "ground_truth": 0,
