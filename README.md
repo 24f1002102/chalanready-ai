@@ -46,6 +46,12 @@ ChalanReady AI continuously monitors CCTV footage, detects traffic violations us
 ## Quick Start
 
 ```bat
+pip install -r requirements.txt
+```
+```bat
+pip install -r requirements-local.txt
+```
+```bat
 start.bat
 ```
 Opens the dashboard at **http://127.0.0.1:8000** automatically.
