@@ -15,9 +15,11 @@
 🌐 **Deployed on Railway** → https://web-production-477cc.up.railway.app/ui/dashboard.html
 
 Note: YOLO is intentionally left out of that file: If you look at your requirements.txt, you'll see this note at the top:
-text
+
+
 *Cloud deployment requirements (no ultralytics = no opencv-GUI conflict)*
 *The app auto-falls back to the color detector in cloud/demo mode.*
+
 The ultralytics package (which powers YOLOv8) is massive. It requires a lot of RAM and storage, which often causes free-tier cloud deployments(like Railway) to crash or timeout. However you can run the app locally in your desktop.
 
 Open dashboard -> click **Run Demo Pipeline** -> explore the full pipeline.
